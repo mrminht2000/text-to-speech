@@ -9,17 +9,23 @@ export function UsageBadge({ usage }: Props) {
 
   return (
     <div className="usage-container" aria-label="Mức tiêu thụ Token">
-      <span className="usage-title">📊 Token Usage:</span>
+      <div className="usage-header">
+        <span className="usage-icon">📊</span>
+        <span className="usage-title">Mức tiêu thụ Token</span>
+      </div>
       <div className="usage-badges">
-        <span className="usage-pill" title="Token văn bản đầu vào">
-          Prompt: <strong>{usage.promptTokens.toLocaleString()}</strong>
-        </span>
-        <span className="usage-pill" title="Token âm thanh đầu ra">
-          Audio: <strong>{usage.candidatesTokens.toLocaleString()}</strong>
-        </span>
-        <span className="usage-pill highlight" title="Tổng số token">
-          Tổng: <strong>{usage.totalTokens.toLocaleString()}</strong>
-        </span>
+        <div className="usage-pill prompt" title="Số token của văn bản đầu vào">
+          <span className="pill-label">📝 Prompt:</span>
+          <span className="pill-val">{usage.promptTokens.toLocaleString()}</span>
+        </div>
+        <div className="usage-pill audio" title="Số token của âm thanh sinh ra">
+          <span className="pill-label">🔊 Audio:</span>
+          <span className="pill-val">{usage.candidatesTokens.toLocaleString()}</span>
+        </div>
+        <div className="usage-pill total highlight" title="Tổng số token đã tiêu thụ">
+          <span className="pill-label">⚡ Tổng cộng:</span>
+          <span className="pill-val">{usage.totalTokens.toLocaleString()}</span>
+        </div>
       </div>
     </div>
   );

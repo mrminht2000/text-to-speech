@@ -26,19 +26,17 @@ export function App() {
     setReferenceText,
     customApiKey,
     setCustomApiKey,
-    customApiUrl,
-    setCustomApiUrl,
     speed,
     setSpeed,
     state,
     generate,
-    download,
   } = useTts();
 
   const handleGenerate = () => {
     generate(text);
   };
 
+  const isMarkdownSupported = selectedModel === 'gemini-3.1-flash-tts-preview';
   const isVoiceCloningModel = selectedModel === 'f5-tts-vietnamese';
 
   return (
@@ -61,28 +59,27 @@ export function App() {
           <span className="badge">AI Audio</span>
         </header>
 
-        {/* API Key & Backend Server Configuration */}
+        {/* AI API Key Configuration (BYOK) */}
         <ApiKeySettings
           apiKey={customApiKey}
           onSaveApiKey={setCustomApiKey}
-          apiUrl={customApiUrl}
-          onSaveApiUrl={setCustomApiUrl}
           disabled={state.isLoading}
         />
 
         {/* Main Interactive Glassmorphism Card */}
         <div className="card">
-          {/* Text Input & Markdown preview */}
+          {/* Text Input with Model-specific Markdown Support */}
           <div className="section">
             <TextInput
               value={text}
               onChange={setText}
               disabled={state.isLoading}
               maxLength={5000}
+              isMarkdownSupported={isMarkdownSupported}
             />
           </div>
 
-          {/* Model & Voice selection in a balanced 2-column row */}
+          {/* Model & Voice selection */}
           <div className="controls-row">
             <div className="control-group">
               <ModelSelector
@@ -93,17 +90,20 @@ export function App() {
               />
             </div>
 
-            <div className="control-group">
-              <VoiceSelector
-                voices={voices}
-                value={selectedVoice}
-                onChange={setSelectedVoice}
-                disabled={state.isLoading}
-              />
-            </div>
+            {/* Voice selector only shown for models with preset voices */}
+            {!isVoiceCloningModel && (
+              <div className="control-group">
+                <VoiceSelector
+                  voices={voices}
+                  value={selectedVoice}
+                  onChange={setSelectedVoice}
+                  disabled={state.isLoading}
+                />
+              </div>
+            )}
           </div>
 
-          {/* Voice Cloner (Conditional for F5-TTS) */}
+          {/* Voice Cloner (Displayed only for Voice Cloning model) */}
           {isVoiceCloningModel && (
             <VoiceCloner
               referenceAudio={referenceAudio}
@@ -140,7 +140,7 @@ export function App() {
           </button>
 
           {/* Progress bar */}
-          {state.isLoading && <ProgressBar progress={state.progress} />}
+          {state.isLoading && <ProgressBar progress={state.progress} model={selectedModel} />}
 
           {/* Error Message */}
           {state.error && (
@@ -149,29 +149,20 @@ export function App() {
             </div>
           )}
 
+          {/* Audio Player */}
+          {state.audioUrl && (
+            <AudioPlayer audioUrl={state.audioUrl} />
+          )}
+
           {/* Token Usage Badge */}
           {state.usage && <UsageBadge usage={state.usage} />}
-
-          {/* Audio Output Result */}
-          {state.audioUrl && (
-            <div className="result-section">
-              <AudioPlayer audioUrl={state.audioUrl} />
-              <button
-                type="button"
-                className="btn-download"
-                onClick={download}
-                id="btn-download-audio"
-              >
-                📥 Tải xuống file MP3
-              </button>
-            </div>
-          )}
         </div>
 
         {/* Footer */}
         <footer className="footer">
           <p>
-            Tác giả: <strong>Zygardoge (Nguyen Ngoc Minh)</strong> — Email: <code>mrminht2000@gmail.com</code>
+            Tác giả: <strong>Zygardoge (Nguyen Ngoc Minh)</strong> — Email:{' '}
+            <a href="mailto:mrminht2000@gmail.com">mrminht2000@gmail.com</a>
           </p>
         </footer>
       </main>

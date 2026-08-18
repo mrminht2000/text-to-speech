@@ -10,12 +10,17 @@ vi.mock('../services/ttsApi', () => ({
 }));
 
 const mockVoices = [
-  { id: 'Charon', name: 'Charon', style: 'Firm', label: 'Adam-like ★', isDefault: true },
-  { id: 'Kore', name: 'Kore', style: 'Firm', label: 'Kore', isDefault: false },
+  { id: 'Charon', name: 'Charon', style: 'Firm', label: 'Adam-like ★', provider: 'Google Gemini', isDefault: true },
+  { id: 'Kore', name: 'Kore', style: 'Firm', label: 'Kore', provider: 'Google Gemini', isDefault: false },
+  { id: 'north_female', name: 'Nữ miền Bắc', style: 'Natural', label: 'Trúc Ly', provider: 'Local Model', isDefault: false },
+  { id: 'voice_clone_custom', name: 'Custom Voice', style: 'Clone', label: 'Clone', provider: 'Local Model', isDefault: false },
 ];
 
 const mockModels = [
   { id: 'gemini-2.5-flash-preview-tts', name: 'Gemini 2.5 Flash', provider: 'Google Gemini', description: 'Lowest cost', isDefault: true, isAvailable: true },
+  { id: 'gemini-3.1-flash-tts-preview', name: 'Gemini 3.1 Flash', provider: 'Google Gemini', description: 'Expressive audio', isDefault: false, isAvailable: true },
+  { id: 'vieneu-tts', name: 'VieNeu-TTS', provider: 'Local Model', description: 'Local 3-region', isDefault: false, isAvailable: true },
+  { id: 'f5-tts-vietnamese', name: 'F5-TTS', provider: 'Local Model', description: 'Voice clone', isDefault: false, isAvailable: true },
 ];
 
 describe('useTts', () => {
@@ -32,14 +37,43 @@ describe('useTts', () => {
     expect(result.current.state.error).toBeNull();
   });
 
-  it('loads voices and models on mount', async () => {
+  it('filters voices for Google Gemini model by default', async () => {
     const { result } = renderHook(() => useTts());
     await act(async () => {
       await Promise.resolve();
     });
-    expect(result.current.voices).toEqual(mockVoices);
-    expect(result.current.models).toEqual(mockModels);
+    // Default model is Gemini 2.5 Flash -> only Gemini voices
+    expect(result.current.voices).toEqual([mockVoices[0], mockVoices[1]]);
     expect(result.current.selectedVoice).toBe('Charon');
+  });
+
+  it('filters voices for VieNeu Local Model when switched', async () => {
+    const { result } = renderHook(() => useTts());
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    act(() => {
+      result.current.setSelectedModel('vieneu-tts');
+    });
+
+    // Only VieNeu local voices (excluding voice_clone_custom)
+    expect(result.current.voices).toEqual([mockVoices[2]]);
+    expect(result.current.selectedVoice).toBe('north_female');
+  });
+
+  it('auto selects voice_clone_custom when F5-TTS is selected', async () => {
+    const { result } = renderHook(() => useTts());
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    act(() => {
+      result.current.setSelectedModel('f5-tts-vietnamese');
+    });
+
+    expect(result.current.voices).toEqual([mockVoices[3]]);
+    expect(result.current.selectedVoice).toBe('voice_clone_custom');
   });
 
   it('sets error on empty text generate', async () => {
@@ -83,16 +117,14 @@ describe('useTts', () => {
     expect(result.current.state.usage).toEqual(fakeUsage);
   });
 
-  it('handles custom API key and custom API URL', async () => {
+  it('handles custom API key correctly', async () => {
     const { result } = renderHook(() => useTts());
     await act(async () => {
       await Promise.resolve();
     });
     act(() => {
       result.current.setCustomApiKey('AIzaSyTest');
-      result.current.setCustomApiUrl('https://test.trycloudflare.com');
     });
     expect(result.current.customApiKey).toBe('AIzaSyTest');
-    expect(result.current.customApiUrl).toBe('https://test.trycloudflare.com');
   });
 });

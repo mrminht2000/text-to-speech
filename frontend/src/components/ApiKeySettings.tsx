@@ -3,26 +3,20 @@ import { useState } from 'react';
 interface Props {
   apiKey: string;
   onSaveApiKey: (key: string) => void;
-  apiUrl: string;
-  onSaveApiUrl: (url: string) => void;
   disabled?: boolean;
 }
 
 export function ApiKeySettings({
   apiKey,
   onSaveApiKey,
-  apiUrl,
-  onSaveApiUrl,
   disabled,
 }: Props) {
   const [isOpen, setIsOpen] = useState(false);
   const [keyInput, setKeyInput] = useState(apiKey);
-  const [urlInput, setUrlInput] = useState(apiUrl);
   const [savedSuccess, setSavedSuccess] = useState(false);
 
   const handleSave = () => {
     onSaveApiKey(keyInput.trim());
-    onSaveApiUrl(urlInput.trim());
     setSavedSuccess(true);
     setTimeout(() => setSavedSuccess(false), 2500);
   };
@@ -32,13 +26,7 @@ export function ApiKeySettings({
     onSaveApiKey('');
   };
 
-  const handleClearUrl = () => {
-    setUrlInput('');
-    onSaveApiUrl('');
-  };
-
   const hasCustomKey = Boolean(apiKey.trim());
-  const hasCustomUrl = Boolean(apiUrl.trim());
 
   return (
     <div className="api-key-wrapper">
@@ -49,14 +37,9 @@ export function ApiKeySettings({
           onClick={() => setIsOpen((prev) => !prev)}
           disabled={disabled}
         >
-          ⚙️ {isOpen ? 'Thu gọn cài đặt Máy chủ & API Key' : 'Cài đặt Backend & API Key (Tùy chọn)'}
+          🔑 {isOpen ? 'Thu gọn Cài đặt AI API Key' : 'Cài đặt AI API Key (Tùy chọn BYOK)'}
         </button>
         <div className="status-badges-group">
-          {hasCustomUrl && (
-            <span className="key-status-badge custom" title={`Đang kết nối: ${apiUrl}`}>
-              🌐 Tunnel/Host riêng
-            </span>
-          )}
           <span className={`key-status-badge ${hasCustomKey ? 'custom' : 'default'}`}>
             {hasCustomKey ? '🟢 Dùng Key cá nhân' : '🔵 Dùng Key hệ thống'}
           </span>
@@ -65,45 +48,13 @@ export function ApiKeySettings({
 
       {isOpen && (
         <div className="api-key-panel">
-          {/* Custom Backend URL Field */}
-          <div className="settings-field-group">
-            <label className="settings-label">
-              🌐 Địa chỉ Backend Server (Cloudflare Tunnel / Local / VPS):
-            </label>
-            <p className="api-key-desc">
-              Khi dùng Vercel, bạn có thể chạy backend tại máy local và điền URL Cloudflare Tunnel (vd: <code>https://xxx.trycloudflare.com</code>) vào đây để kết nối trực tiếp.
-            </p>
-            <div className="api-key-input-row">
-              <input
-                type="text"
-                className="api-key-input"
-                value={urlInput}
-                onChange={(e) => setUrlInput(e.target.value)}
-                placeholder="Để trống mặc định hoặc https://xxxx.trycloudflare.com"
-                disabled={disabled}
-                autoComplete="off"
-              />
-              {hasCustomUrl && (
-                <button
-                  type="button"
-                  className="btn-clear-key"
-                  onClick={handleClearUrl}
-                  disabled={disabled}
-                  title="Xóa để quay lại dùng mặc định"
-                >
-                  Xóa URL
-                </button>
-              )}
-            </div>
-          </div>
-
           {/* Gemini API Key Field */}
           <div className="settings-field-group">
             <label className="settings-label">
-              🔑 Google Gemini API Key:
+              🔑 Google Gemini API Key (Cá nhân):
             </label>
             <p className="api-key-desc">
-              Nhập Google Gemini API Key riêng của bạn để dùng hạn mức token cá nhân (Lưu an toàn trong LocalStorage).
+              Nhập Google Gemini API Key riêng của bạn để dùng hạn mức token cá nhân (Lưu an toàn trên trình duyệt của bạn).
             </p>
             <div className="api-key-input-row">
               <input
@@ -136,10 +87,10 @@ export function ApiKeySettings({
               onClick={handleSave}
               disabled={disabled}
             >
-              💾 Lưu Cài Đặt
+              💾 Lưu API Key
             </button>
             {savedSuccess && (
-              <span className="key-saved-msg">✅ Đã lưu cài đặt thành công!</span>
+              <span className="key-saved-msg">✅ Đã lưu API Key thành công!</span>
             )}
           </div>
         </div>

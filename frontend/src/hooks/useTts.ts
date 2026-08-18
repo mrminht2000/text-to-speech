@@ -1,12 +1,11 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import type { VoiceInfo, ModelInfo, TtsState } from '../types/tts';
 import { fetchVoices, fetchModels, generateSpeech } from '../services/ttsApi';
 
 const STORAGE_KEY_API_KEY = 'viet_tts_custom_api_key';
-const STORAGE_KEY_API_URL = 'viet_tts_custom_api_url';
 
 export function useTts() {
-  const [voices, setVoices] = useState<VoiceInfo[]>([]);
+  const [allVoices, setAllVoices] = useState<VoiceInfo[]>([]);
   const [models, setModels] = useState<ModelInfo[]>([]);
   const [selectedVoice, setSelectedVoice] = useState<string>('Charon');
   const [selectedModel, setSelectedModel] = useState<string>('gemini-2.5-flash-preview-tts');
@@ -15,13 +14,6 @@ export function useTts() {
   const [customApiKey, setCustomApiKeyState] = useState<string>(() => {
     try {
       return localStorage.getItem(STORAGE_KEY_API_KEY) || '';
-    } catch {
-      return '';
-    }
-  });
-  const [customApiUrl, setCustomApiUrlState] = useState<string>(() => {
-    try {
-      return localStorage.getItem(STORAGE_KEY_API_URL) || '';
     } catch {
       return '';
     }
@@ -51,34 +43,35 @@ export function useTts() {
     }
   }, []);
 
-  const setCustomApiUrl = useCallback((url: string) => {
-    setCustomApiUrlState(url);
-    try {
-      if (url) {
-        localStorage.setItem(STORAGE_KEY_API_URL, url);
-      } else {
-        localStorage.removeItem(STORAGE_KEY_API_URL);
-      }
-    } catch {
-      // Ignore localStorage errors
+  // Filter voices specific to the selected model
+  const voices = useMemo(() => {
+    if (selectedModel.startsWith('gemini-')) {
+      return allVoices.filter((v) => v.provider === 'Google Gemini');
     }
-  }, []);
+    if (selectedModel === 'vieneu-tts') {
+      return allVoices.filter((v) => v.provider === 'Local Model' && v.id !== 'voice_clone_custom');
+    }
+    if (selectedModel === 'f5-tts-vietnamese') {
+      return allVoices.filter((v) => v.id === 'voice_clone_custom');
+    }
+    return allVoices;
+  }, [allVoices, selectedModel]);
 
-  // Load voices and models on mount or when customApiUrl changes
+  // Load voices and models on mount
   useEffect(() => {
     let cancelled = false;
 
-    Promise.all([fetchVoices(customApiUrl), fetchModels(customApiUrl)])
+    Promise.all([fetchVoices(), fetchModels()])
       .then(([voicesData, modelsData]) => {
         if (cancelled) return;
-        setVoices(voicesData);
+        setAllVoices(voicesData);
         setModels(modelsData);
-
-        const defaultVoice = voicesData.find((v) => v.isDefault) || voicesData[0];
-        if (defaultVoice) setSelectedVoice(defaultVoice.id);
 
         const defaultModel = modelsData.find((m) => m.isDefault) || modelsData[0];
         if (defaultModel) setSelectedModel(defaultModel.id);
+
+        const defaultVoice = voicesData.find((v) => v.isDefault && v.provider === 'Google Gemini') || voicesData[0];
+        if (defaultVoice) setSelectedVoice(defaultVoice.id);
 
         setState((s) => ({ ...s, error: null }));
       })
@@ -86,9 +79,7 @@ export function useTts() {
         if (cancelled) return;
         setState((s) => ({
           ...s,
-          error: customApiUrl
-            ? `Không thể kết nối đến Backend: ${customApiUrl}. Vui lòng kiểm tra lại URL tunnel.`
-            : 'Không thể kết nối danh mục giọng đọc / model. Vui lòng kiểm tra backend.',
+          error: 'Không thể kết nối danh mục giọng đọc / model. Vui lòng kiểm tra backend.',
         }));
       });
 
@@ -96,16 +87,33 @@ export function useTts() {
       cancelled = true;
       if (progressIntervalRef.current) clearInterval(progressIntervalRef.current);
     };
-  }, [customApiUrl]);
+  }, []);
 
-  // When model changes to F5-TTS, auto select voice_clone_custom
+  // Sync selectedVoice when selectedModel changes
   useEffect(() => {
     if (selectedModel === 'f5-tts-vietnamese') {
       setSelectedVoice('voice_clone_custom');
-    } else if (selectedModel === 'vieneu-tts') {
-      setSelectedVoice('north_female');
+      return;
     }
-  }, [selectedModel]);
+
+    if (selectedModel === 'vieneu-tts') {
+      const localVoices = allVoices.filter((v) => v.provider === 'Local Model' && v.id !== 'voice_clone_custom');
+      const exists = localVoices.some((v) => v.id === selectedVoice);
+      if (!exists && localVoices.length > 0) {
+        setSelectedVoice(localVoices[0].id);
+      }
+      return;
+    }
+
+    if (selectedModel.startsWith('gemini-')) {
+      const geminiVoices = allVoices.filter((v) => v.provider === 'Google Gemini');
+      const exists = geminiVoices.some((v) => v.id === selectedVoice);
+      if (!exists && geminiVoices.length > 0) {
+        const defaultGemini = geminiVoices.find((v) => v.isDefault) || geminiVoices[0];
+        setSelectedVoice(defaultGemini.id);
+      }
+    }
+  }, [selectedModel, allVoices, selectedVoice]);
 
   const startProgressAnimation = () => {
     setState((s) => ({ ...s, progress: 8 }));
@@ -161,18 +169,16 @@ export function useTts() {
     startProgressAnimation();
 
     try {
-      const { blob, usage } = await generateSpeech(
-        {
-          text,
-          voice: selectedVoice,
-          speed,
-          model: selectedModel,
-          apiKey: customApiKey.trim() || undefined,
-          referenceAudioBase64: referenceAudio || undefined,
-          referenceText: referenceText || undefined,
-        },
-        customApiUrl.trim() || undefined,
-      );
+      const isCloning = selectedModel === 'f5-tts-vietnamese';
+      const { blob, usage } = await generateSpeech({
+        text,
+        voice: selectedVoice,
+        speed,
+        model: selectedModel,
+        apiKey: customApiKey.trim() || undefined,
+        referenceAudioBase64: isCloning ? (referenceAudio || undefined) : undefined,
+        referenceText: isCloning ? (referenceText || undefined) : undefined,
+      });
 
       stopProgressAnimation(true);
 
@@ -190,7 +196,7 @@ export function useTts() {
       const message = err instanceof Error ? err.message : 'Đã xảy ra lỗi không xác định.';
       setState((s) => ({ ...s, isLoading: false, progress: 0, error: message }));
     }
-  }, [selectedVoice, speed, selectedModel, customApiKey, customApiUrl, referenceAudio, referenceText]);
+  }, [selectedVoice, speed, selectedModel, customApiKey, referenceAudio, referenceText]);
 
   const download = useCallback(() => {
     if (!state.audioBlob) return;
@@ -216,8 +222,6 @@ export function useTts() {
     setReferenceText,
     customApiKey,
     setCustomApiKey,
-    customApiUrl,
-    setCustomApiUrl,
     speed,
     setSpeed,
     state,

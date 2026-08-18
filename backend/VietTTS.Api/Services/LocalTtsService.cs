@@ -25,14 +25,15 @@ public class LocalTtsService : ILocalTtsService
     {
         var client = _httpClientFactory.CreateClient("local_tts");
 
+        var isCloning = string.Equals(model, "f5-tts-vietnamese", StringComparison.OrdinalIgnoreCase);
         var payload = new
         {
             text,
             voice,
             speed,
-            model = model ?? "f5-tts-vietnamese",
-            reference_audio_base64 = referenceAudioBase64,
-            reference_text = referenceText
+            model = model ?? "vieneu-tts",
+            reference_audio_base64 = isCloning ? referenceAudioBase64 : null,
+            reference_text = isCloning ? referenceText : null
         };
 
         var requestUri = $"{_endpoint.TrimEnd('/')}/synthesize";

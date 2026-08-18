@@ -190,3 +190,6 @@ cloudflared.exe
 
 
 .vercel
+tunnel_token.txt
+tunnel.log
+frontend/.env.vercel

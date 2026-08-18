@@ -1,10 +1,11 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 
 interface Props {
   value: string;
   onChange: (value: string) => void;
   maxLength?: number;
   disabled?: boolean;
+  isMarkdownSupported?: boolean;
 }
 
 const QUICK_TAGS = [
@@ -49,9 +50,22 @@ function renderSimpleMarkdown(text: string): string {
   return `<p>${html}</p>`;
 }
 
-export function TextInput({ value, onChange, maxLength = 5000, disabled }: Props) {
+export function TextInput({
+  value,
+  onChange,
+  maxLength = 5000,
+  disabled,
+  isMarkdownSupported = false,
+}: Props) {
   const [activeTab, setActiveTab] = useState<'edit' | 'preview'>('edit');
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  // If model changes to one without markdown support, reset to edit tab
+  useEffect(() => {
+    if (!isMarkdownSupported) {
+      setActiveTab('edit');
+    }
+  }, [isMarkdownSupported]);
 
   const count = value.length;
   const isNearLimit = count > maxLength * 0.9;
@@ -79,51 +93,57 @@ export function TextInput({ value, onChange, maxLength = 5000, disabled }: Props
 
   return (
     <div className="text-input-wrapper">
-      {/* Editor Header / Tabs */}
-      <div className="editor-tabs-row">
-        <div className="editor-tabs">
-          <button
-            type="button"
-            className={`tab-btn ${activeTab === 'edit' ? 'active' : ''}`}
-            onClick={() => setActiveTab('edit')}
-          >
-            ✍️ Soạn thảo
-          </button>
-          <button
-            type="button"
-            className={`tab-btn ${activeTab === 'preview' ? 'active' : ''}`}
-            onClick={() => setActiveTab('preview')}
-          >
-            👁️ Xem trước Markdown
-          </button>
-        </div>
-
-        {/* Quick Tag Toolbar */}
-        <div className="quick-tags-toolbar">
-          <span className="tags-label">Gợi ý Tags:</span>
-          {QUICK_TAGS.map((tag) => (
+      {/* Editor Header / Tabs (Only when Markdown is supported e.g. Gemini 3.1) */}
+      {isMarkdownSupported && (
+        <div className="editor-tabs-row">
+          <div className="editor-tabs">
             <button
-              key={tag.label}
               type="button"
-              className="quick-tag-chip"
-              onClick={() => handleInsertTag(tag.insert)}
-              disabled={disabled || activeTab === 'preview'}
-              title={`Chèn ${tag.insert}`}
+              className={`tab-btn ${activeTab === 'edit' ? 'active' : ''}`}
+              onClick={() => setActiveTab('edit')}
             >
-              {tag.label}
+              ✍️ Soạn thảo
             </button>
-          ))}
-        </div>
-      </div>
+            <button
+              type="button"
+              className={`tab-btn ${activeTab === 'preview' ? 'active' : ''}`}
+              onClick={() => setActiveTab('preview')}
+            >
+              👁️ Xem trước Markdown
+            </button>
+          </div>
 
-      {activeTab === 'edit' ? (
+          {/* Quick Tag Toolbar */}
+          <div className="quick-tags-toolbar">
+            <span className="tags-label">Audio Tags (Gemini 3.1):</span>
+            {QUICK_TAGS.map((tag) => (
+              <button
+                key={tag.label}
+                type="button"
+                className="quick-tag-chip"
+                onClick={() => handleInsertTag(tag.insert)}
+                disabled={disabled || activeTab === 'preview'}
+                title={`Chèn ${tag.insert}`}
+              >
+                {tag.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {activeTab === 'edit' || !isMarkdownSupported ? (
         <textarea
           ref={textareaRef}
           id="tts-text-input"
           className="text-input"
           value={value}
           onChange={(e) => onChange(e.target.value)}
-          placeholder="Nhập văn bản tiếng Việt hoặc Markdown (Hỗ trợ tiêu đề #, **nhấn mạnh**, [whispers], [laughs]...)"
+          placeholder={
+            isMarkdownSupported
+              ? "Nhập văn bản tiếng Việt hoặc Markdown (Hỗ trợ tiêu đề #, **nhấn mạnh**, [whispers], [laughs]...)"
+              : "Nhập văn bản tiếng Việt cần chuyển sang giọng nói..."
+          }
           maxLength={maxLength}
           disabled={disabled}
           rows={8}
@@ -138,7 +158,11 @@ export function TextInput({ value, onChange, maxLength = 5000, disabled }: Props
       )}
 
       <div className="input-footer-row">
-        <span className="markdown-hint">💡 Hỗ trợ cú pháp Markdown chuẩn & Expressive Audio Tags của Gemini</span>
+        <span className="markdown-hint">
+          {isMarkdownSupported
+            ? '💡 Hỗ trợ cú pháp Markdown chuẩn & Expressive Audio Tags độc quyền của Gemini 3.1'
+            : '💡 Nhập văn bản tiếng Việt để mô hình tổng hợp giọng đọc chuẩn xác'}
+        </span>
         <div
           id="char-count"
           className={`char-count ${isNearLimit ? 'warning' : ''} ${isOverLimit ? 'error' : ''}`}

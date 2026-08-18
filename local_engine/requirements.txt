@@ -1,11 +1,16 @@
+# MinhTTS Local Engine — Python Dependencies
+# Install CUDA build of torch separately:
+#   pip install torch torchaudio --index-url https://download.pytorch.org/whl/cu126
+# Then install the rest:
+#   pip install -r requirements.txt
+
 fastapi>=0.115.0
-uvicorn>=0.30.0
-pydantic>=2.8.0
-vieneu>=3.2.0
-gTTS>=2.5.0
-torch>=2.0.0
-torchaudio>=2.0.0
-soundfile>=0.12.1
-librosa>=0.10.0
-numpy>=1.26.0
-aiohttp>=3.9.0
+uvicorn[standard]>=0.30.0   # [standard] includes uvloop & httptools for max throughput
+soundfile>=0.12.0
+numpy>=2.0.0                # NumPy 2.x: faster array ops, better GPU interop
+vieneu>=0.1.0
+transformers>=4.50.0
+accelerate>=1.0.0
+onnxruntime-gpu==1.24.1     # MUST be this version: 1.24.1 for CUDA 12.6 / cuDNN 9.x
+                            # 1.25+ requires CUDA 13.x — will silently fall back to CPU!
+gTTS>=2.5.0                 # Fallback only
