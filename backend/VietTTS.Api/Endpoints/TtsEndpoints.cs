@@ -8,6 +8,10 @@ public static class TtsEndpoints
 {
     public static void MapTtsEndpoints(this WebApplication app)
     {
+        app.MapGet("/api/models", GetModels)
+           .WithName("GetModels")
+           .WithTags("TTS");
+
         app.MapGet("/api/voices", GetVoices)
            .WithName("GetVoices")
            .WithTags("TTS");
@@ -15,6 +19,13 @@ public static class TtsEndpoints
         app.MapPost("/api/tts", GenerateSpeech)
            .WithName("GenerateSpeech")
            .WithTags("TTS");
+    }
+
+    // ── GET /api/models ───────────────────────────────────────────────────────
+
+    private static IResult GetModels()
+    {
+        return Results.Ok(new { models = ModelCatalog.Models });
     }
 
     // ── GET /api/voices ───────────────────────────────────────────────────────
@@ -29,6 +40,7 @@ public static class TtsEndpoints
     private static async Task<IResult> GenerateSpeech(
         TtsRequest request,
         IGeminiTtsService ttsService,
+        HttpContext httpContext,
         CancellationToken cancellationToken)
     {
         // Validate text length (DataAnnotations not auto-run on minimal API)
@@ -46,24 +58,37 @@ public static class TtsEndpoints
 
         try
         {
-            var mp3Bytes = await ttsService.GenerateAudioAsync(
-                request.Text, request.Voice, request.Speed, cancellationToken);
+            var result = await ttsService.GenerateAudioAsync(
+                request.Text, request.Voice, request.Speed, request.Model, cancellationToken);
+
+            httpContext.Response.Headers["X-Usage-Prompt-Tokens"] = result.Usage.PromptTokens.ToString();
+            httpContext.Response.Headers["X-Usage-Candidates-Tokens"] = result.Usage.CandidatesTokens.ToString();
+            httpContext.Response.Headers["X-Usage-Total-Tokens"] = result.Usage.TotalTokens.ToString();
 
             return Results.File(
-                mp3Bytes,
+                result.AudioBytes,
                 contentType: "audio/mpeg",
                 fileDownloadName: "output.mp3");
         }
+
         catch (HttpRequestException ex)
         {
             return Results.Problem(
-                detail: $"TTS provider error: {ex.Message}",
+                detail: ex.Message,
                 statusCode: StatusCodes.Status502BadGateway,
-                title: "TTS Provider Unavailable");
+                title: "TTS Provider Error");
         }
+
         catch (OperationCanceledException)
         {
             return Results.StatusCode(StatusCodes.Status499ClientClosedRequest);
+        }
+        catch (Exception ex)
+        {
+            return Results.Problem(
+                detail: ex.Message,
+                statusCode: StatusCodes.Status500InternalServerError,
+                title: "TTS Generation Error");
         }
     }
 }

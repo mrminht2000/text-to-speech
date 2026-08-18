@@ -1,17 +1,23 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { useTts } from './hooks/useTts';
 import { TextInput } from './components/TextInput';
+import { ModelSelector } from './components/ModelSelector';
 import { VoiceSelector } from './components/VoiceSelector';
 import { SpeedSlider } from './components/SpeedSlider';
 import { AudioPlayer } from './components/AudioPlayer';
+import { ProgressBar } from './components/ProgressBar';
+import { UsageBadge } from './components/UsageBadge';
 import './styles/index.css';
 
 export default function App() {
   const [text, setText] = useState('');
   const {
     voices,
+    models,
     selectedVoice,
     setSelectedVoice,
+    selectedModel,
+    setSelectedModel,
     speed,
     setSpeed,
     state,
@@ -34,18 +40,28 @@ export default function App() {
           <div className="logo">
             <span className="logo-icon">🎙</span>
             <div className="logo-text">
-              <h1 className="title">VietTTS</h1>
-              <p className="subtitle">Chuyển văn bản tiếng Việt thành giọng nói</p>
+              <h1 className="title">VietTTS Studio</h1>
+              <p className="subtitle">Chuyển đổi văn bản tiếng Việt sang giọng nói AI</p>
             </div>
           </div>
-          <div className="badge">Gemini AI</div>
+          <div className="badge">AI Speech Engine</div>
         </header>
 
         {/* Card */}
         <div className="card">
+          {/* Model selection row */}
+          <section className="section">
+            <ModelSelector
+              models={models}
+              value={selectedModel}
+              onChange={setSelectedModel}
+              disabled={state.isLoading}
+            />
+          </section>
+
           {/* Text input */}
           <section className="section">
-            <h2 className="section-title">📝 Văn bản</h2>
+            <h2 className="section-title">📝 Văn bản cần đọc</h2>
             <TextInput
               value={text}
               onChange={setText}
@@ -72,6 +88,11 @@ export default function App() {
             </div>
           </section>
 
+          {/* Progress bar during generation */}
+          {state.isLoading && (
+            <ProgressBar progress={state.progress} />
+          )}
+
           {/* Error */}
           {state.error && (
             <div className="error-banner" role="alert">
@@ -90,7 +111,7 @@ export default function App() {
             {state.isLoading ? (
               <>
                 <span className="spinner" aria-hidden="true" />
-                Đang tạo giọng nói...
+                Đang chuyển đổi giọng nói...
               </>
             ) : (
               <>
@@ -99,17 +120,20 @@ export default function App() {
             )}
           </button>
 
-          {/* Audio player + download */}
+          {/* Audio player + download + usage */}
           {state.audioUrl && (
             <section className="section result-section">
-              <h2 className="section-title">🔊 Kết quả</h2>
+              <div className="result-header">
+                <h2 className="section-title">🔊 Kết quả Âm thanh</h2>
+                <UsageBadge usage={state.usage} />
+              </div>
               <AudioPlayer audioUrl={state.audioUrl} />
               <button
                 id="download-btn"
                 className="btn-download"
                 onClick={download}
               >
-                ⬇ Tải MP3
+                ⬇ Tải xuống file MP3
               </button>
             </section>
           )}
@@ -117,7 +141,7 @@ export default function App() {
 
         {/* Footer */}
         <footer className="footer">
-          <p>Giọng mặc định: <strong>Charon</strong> (Adam-like) • Powered by Gemini TTS</p>
+          <p>Giọng mặc định: <strong>Charon</strong> (Adam-like TikTok) • Hỗ trợ Google Gemini & Local F5-TTS</p>
         </footer>
       </main>
     </div>

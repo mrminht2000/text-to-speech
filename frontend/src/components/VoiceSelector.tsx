@@ -1,4 +1,3 @@
-import React from 'react';
 import type { VoiceInfo } from '../types/tts';
 
 interface Props {

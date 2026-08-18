@@ -14,7 +14,13 @@ builder.Services.AddCors(options =>
     options.AddDefaultPolicy(policy =>
         policy.WithOrigins(allowedOrigins)
               .AllowAnyHeader()
-              .AllowAnyMethod()));
+              .AllowAnyMethod()
+              .WithExposedHeaders(
+                  "X-Usage-Prompt-Tokens",
+                  "X-Usage-Candidates-Tokens",
+                  "X-Usage-Total-Tokens",
+                  "Content-Disposition")));
+
 
 // HttpClient for Gemini API
 builder.Services.AddHttpClient("gemini", client =>

@@ -168,6 +168,38 @@ public class TtsEndpointsTests : IClassFixture<WebApplicationFactory<Program>>
         response.StatusCode.Should().Be(HttpStatusCode.BadGateway);
     }
 
+    [Fact]
+    public async Task GetModels_ReturnsOk_WithModelList()
+    {
+        // Arrange
+        var client = _factory.CreateClient();
+
+        // Act
+        var response = await client.GetAsync("/api/models");
+
+        // Assert
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var body = await response.Content.ReadAsStringAsync();
+        using var doc = JsonDocument.Parse(body);
+        doc.RootElement.TryGetProperty("models", out var models).Should().BeTrue();
+        models.GetArrayLength().Should().BeGreaterThan(0);
+    }
+
+    [Fact]
+    public async Task PostTts_ValidRequest_ReturnsUsageHeaders()
+    {
+        // Arrange
+        var client = CreateClientWithMockTts(mockAudioBytes: [0xFF, 0xFB, 0x90, 0x00]);
+        var request = new TtsRequest { Text = "Test", Voice = "Charon", Speed = 1.0 };
+
+        // Act
+        var response = await client.PostAsJsonAsync("/api/tts", request);
+
+        // Assert
+        response.Headers.Contains("X-Usage-Prompt-Tokens").Should().BeTrue();
+        response.Headers.Contains("X-Usage-Total-Tokens").Should().BeTrue();
+    }
+
     // ── Helpers ───────────────────────────────────────────────────────────────
 
     private HttpClient CreateClientWithMockTts(byte[]? mockAudioBytes = null, Exception? throwException = null)
@@ -175,11 +207,23 @@ public class TtsEndpointsTests : IClassFixture<WebApplicationFactory<Program>>
         var mockTtsService = Substitute.For<IGeminiTtsService>();
 
         if (throwException is not null)
-            mockTtsService.GenerateAudioAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<double>(), Arg.Any<CancellationToken>())
-                          .Returns(Task.FromException<byte[]>(throwException));
+        {
+            mockTtsService.GenerateAudioAsync(
+                Arg.Any<string>(), Arg.Any<string>(), Arg.Any<double>(), Arg.Any<string?>(), Arg.Any<CancellationToken>())
+                .Returns(Task.FromException<TtsResult>(throwException));
+        }
         else
-            mockTtsService.GenerateAudioAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<double>(), Arg.Any<CancellationToken>())
-                          .Returns(mockAudioBytes ?? [0xFF, 0xFB, 0x90, 0x00]);
+        {
+            var fakeResult = new TtsResult
+            {
+                AudioBytes = mockAudioBytes ?? [0xFF, 0xFB, 0x90, 0x00],
+                Usage = new TtsUsage { PromptTokens = 5, CandidatesTokens = 40, TotalTokens = 45 }
+            };
+
+            mockTtsService.GenerateAudioAsync(
+                Arg.Any<string>(), Arg.Any<string>(), Arg.Any<double>(), Arg.Any<string?>(), Arg.Any<CancellationToken>())
+                .Returns(Task.FromResult(fakeResult));
+        }
 
         return _factory.WithWebHostBuilder(builder =>
             builder.ConfigureServices(services =>
@@ -187,3 +231,4 @@ public class TtsEndpointsTests : IClassFixture<WebApplicationFactory<Program>>
             .CreateClient();
     }
 }
+

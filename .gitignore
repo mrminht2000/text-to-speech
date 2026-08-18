@@ -185,3 +185,4 @@ x86/
 # Built Visual Studio Code Extensions
 *.vsix
 .agents
+backend/VietTTS.Api/appsettings.json

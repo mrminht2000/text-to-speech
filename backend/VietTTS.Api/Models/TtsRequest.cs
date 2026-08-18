@@ -13,4 +13,7 @@ public class TtsRequest
 
     [Range(0.5, 2.0, ErrorMessage = "Speed must be between 0.5 and 2.0.")]
     public double Speed { get; set; } = 1.0;
+
+    public string? Model { get; set; }
 }
+
