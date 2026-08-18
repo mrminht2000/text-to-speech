@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="VietTTS.Api.Tests/VietTTS.Api.Tests.csproj" />
+  <Project Path="VietTTS.Api/VietTTS.Api.csproj" />
+</Solution>

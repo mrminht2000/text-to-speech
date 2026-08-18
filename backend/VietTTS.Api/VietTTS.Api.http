@@ -1,0 +1,6 @@
+@VietTTS.Api_HostAddress = http://localhost:5027
+
+GET {{VietTTS.Api_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
