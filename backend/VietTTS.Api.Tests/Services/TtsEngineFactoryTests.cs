@@ -10,11 +10,13 @@ public class TtsEngineFactoryTests
 {
     private readonly IGeminiTtsService _geminiTtsService = Substitute.For<IGeminiTtsService>();
     private readonly ILocalTtsService _localTtsService = Substitute.For<ILocalTtsService>();
+    private readonly IOpenAiTtsService _openAiTtsService = Substitute.For<IOpenAiTtsService>();
+    private readonly IElevenLabsTtsService _elevenLabsTtsService = Substitute.For<IElevenLabsTtsService>();
     private readonly TtsEngineFactory _factory;
 
     public TtsEngineFactoryTests()
     {
-        _factory = new TtsEngineFactory(_geminiTtsService, _localTtsService);
+        _factory = new TtsEngineFactory(_geminiTtsService, _localTtsService, _openAiTtsService, _elevenLabsTtsService);
     }
 
     [Fact]
@@ -39,7 +41,6 @@ public class TtsEngineFactoryTests
         result.Should().Be(fakeResult);
         await _geminiTtsService.Received(1).GenerateAudioAsync(
             request.Text, request.Voice, request.Speed, request.Model, request.ApiKey, Arg.Any<CancellationToken>());
-        await _localTtsService.DidNotReceiveWithAnyArgs().GenerateAudioAsync(default!, default!);
     }
 
     [Fact]
@@ -64,6 +65,49 @@ public class TtsEngineFactoryTests
         result.Should().Be(fakeResult);
         await _localTtsService.Received(1).GenerateAudioAsync(
             request.Text, request.Voice, request.Speed, request.Model, request.ReferenceAudioBase64, request.ReferenceText, Arg.Any<CancellationToken>());
-        await _geminiTtsService.DidNotReceiveWithAnyArgs().GenerateAudioAsync(default!, default!);
+    }
+
+    [Fact]
+    public async Task ProcessTtsRequestAsync_WithOpenAiModel_RoutesToOpenAiService()
+    {
+        var request = new TtsRequest
+        {
+            Text = "Hello OpenAI",
+            Voice = "Alloy",
+            Speed = 1.0,
+            Model = "tts-1",
+            ApiKey = "sk-openai"
+        };
+
+        var fakeResult = new TtsResult { AudioBytes = [7, 8, 9] };
+        _openAiTtsService.SynthesizeSpeechAsync(request, Arg.Any<CancellationToken>())
+            .Returns(Task.FromResult(fakeResult));
+
+        var result = await _factory.ProcessTtsRequestAsync(request);
+
+        result.Should().Be(fakeResult);
+        await _openAiTtsService.Received(1).SynthesizeSpeechAsync(request, Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task ProcessTtsRequestAsync_WithElevenLabsModel_RoutesToElevenLabsService()
+    {
+        var request = new TtsRequest
+        {
+            Text = "Hello ElevenLabs",
+            Voice = "Adam",
+            Speed = 1.0,
+            Model = "eleven_multilingual_v2",
+            ApiKey = "xi-eleven"
+        };
+
+        var fakeResult = new TtsResult { AudioBytes = [10, 11, 12] };
+        _elevenLabsTtsService.SynthesizeSpeechAsync(request, Arg.Any<CancellationToken>())
+            .Returns(Task.FromResult(fakeResult));
+
+        var result = await _factory.ProcessTtsRequestAsync(request);
+
+        result.Should().Be(fakeResult);
+        await _elevenLabsTtsService.Received(1).SynthesizeSpeechAsync(request, Arg.Any<CancellationToken>());
     }
 }

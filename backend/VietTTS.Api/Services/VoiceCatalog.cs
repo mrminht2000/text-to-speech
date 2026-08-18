@@ -3,22 +3,40 @@ using VietTTS.Api.Models;
 namespace VietTTS.Api.Services;
 
 /// <summary>
-/// Static catalog of available voices categorized by Provider (Google Gemini, Local Model).
+/// Static catalog of available voices categorized by Provider (Google Gemini, Local Model, OpenAI, ElevenLabs).
 /// </summary>
 public static class VoiceCatalog
 {
     public static readonly IReadOnlyList<VoiceInfo> Voices = new List<VoiceInfo>
     {
         // ── Local Model Voices (Voice Cloning & 3-Region Accents) ───────────────
-        new() { Id = "voice_clone_custom", Name = "Voice Clone (Mẫu tải lên)", Style = "Custom Voice",   Label = "🎙️ Voice Cloning (Từ Audio mẫu tải lên) ★", Provider = "Local Model", IsDefault = false },
-        new() { Id = "north_female",        Name = "Nữ miền Bắc (Hà Nội)",     Style = "Natural / Crisp", Label = "👩 Nữ miền Bắc — Trong trẻo, thanh thoát",    Provider = "Local Model", IsDefault = false },
-        new() { Id = "north_male",          Name = "Nam miền Bắc (Hà Nội)",     Style = "Mature / Firm",   Label = "👨 Nam miền Bắc — Trầm ấm, dõng dạc",       Provider = "Local Model", IsDefault = false },
-        new() { Id = "south_female",        Name = "Nữ miền Nam (Sài Gòn)",     Style = "Warm / Melodic",  Label = "👩 Nữ miền Nam — Ngọt ngào, tự nhiên",      Provider = "Local Model", IsDefault = false },
-        new() { Id = "south_male",          Name = "Nam miền Nam (Sài Gòn)",     Style = "Friendly",        Label = "👨 Nam miền Nam — Thân thiện, gần gũi",     Provider = "Local Model", IsDefault = false },
-        new() { Id = "central_female",      Name = "Nữ miền Trung (Huế/Đà Nẵng)", Style = "Gentle",        Label = "👩 Nữ miền Trung — Dịu dàng, truyền cảm",   Provider = "Local Model", IsDefault = false },
+        new() { Id = "voice_clone_custom", Name = "Voice Clone (Mẫu tải lên)", Style = "Custom Voice",   Label = "Voice Cloning (Audio mẫu tải lên)", Provider = "Local GPU", IsDefault = false },
+        new() { Id = "north_female",        Name = "Nữ miền Bắc (Hà Nội)",     Style = "Natural / Crisp", Label = "Nữ miền Bắc — Trong trẻo, thanh thoát", Provider = "Local GPU", IsDefault = false },
+        new() { Id = "north_male",          Name = "Nam miền Bắc (Hà Nội)",     Style = "Mature / Firm",   Label = "Nam miền Bắc — Trầm ấm, dõng dạc", Provider = "Local GPU", IsDefault = false },
+        new() { Id = "south_female",        Name = "Nữ miền Nam (Sài Gòn)",     Style = "Warm / Melodic",  Label = "Nữ miền Nam — Ngọt ngào, tự nhiên", Provider = "Local GPU", IsDefault = false },
+        new() { Id = "south_male",          Name = "Nam miền Nam (Sài Gòn)",     Style = "Friendly",        Label = "Nam miền Nam — Thân thiện, gần gũi", Provider = "Local GPU", IsDefault = false },
+        new() { Id = "central_female",      Name = "Nữ miền Trung (Huế)",       Style = "Gentle",          Label = "Nữ miền Trung — Dịu dàng, truyền cảm", Provider = "Local GPU", IsDefault = false },
+
+        // ── OpenAI TTS Voices (BYOK) ───────────────────────────────────────────
+        new() { Id = "Alloy",   Name = "Alloy",   Style = "Neutral / Balanced",    Label = "Alloy — Trung tính, cân bằng chuẩn studio", Provider = "OpenAI", IsDefault = false },
+        new() { Id = "Echo",    Name = "Echo",    Style = "Warm Male",             Label = "Echo — Nam ấm áp, truyền cảm", Provider = "OpenAI", IsDefault = false },
+        new() { Id = "Fable",   Name = "Fable",   Style = "Expressive / British",  Label = "Fable — Biểu cảm cao, tự sự", Provider = "OpenAI", IsDefault = false },
+        new() { Id = "Onyx",    Name = "Onyx",    Style = "Deep Male",             Label = "Onyx — Nam trầm phát thanh viên", Provider = "OpenAI", IsDefault = false },
+        new() { Id = "Nova",    Name = "Nova",    Style = "Energetic Female",      Label = "Nova — Nữ trẻ trung, năng động", Provider = "OpenAI", IsDefault = false },
+        new() { Id = "Shimmer", Name = "Shimmer", Style = "Clear Female",          Label = "Shimmer — Nữ trong trẻo, tự nhiên", Provider = "OpenAI", IsDefault = false },
+
+        // ── ElevenLabs Studio Voices (BYOK) ────────────────────────────────────
+        new() { Id = "Adam",    Name = "Adam",    Style = "Deep Narration",        Label = "Adam — Giọng nam phòng thu huyền thoại", Provider = "ElevenLabs", IsDefault = false },
+        new() { Id = "Rachel",  Name = "Rachel",  Style = "Calm Female",           Label = "Rachel — Nữ nhẹ nhàng, lôi cuốn", Provider = "ElevenLabs", IsDefault = false },
+        new() { Id = "Antoni",  Name = "Antoni",  Style = "Modern Male",           Label = "Antoni — Nam hiện đại, phóng khoáng", Provider = "ElevenLabs", IsDefault = false },
+        new() { Id = "Bella",   Name = "Bella",   Style = "Sweet Female",          Label = "Bella — Nữ ngọt ngào, dịu êm", Provider = "ElevenLabs", IsDefault = false },
+        new() { Id = "Elli",    Name = "Elli",    Style = "Lively Female",         Label = "Elli — Nữ hoạt ngôn, sắc sảo", Provider = "ElevenLabs", IsDefault = false },
+        new() { Id = "Josh",    Name = "Josh",    Style = "Natural Male",          Label = "Josh — Nam tự nhiên, chân thực", Provider = "ElevenLabs", IsDefault = false },
+        new() { Id = "Arnold",  Name = "Arnold",  Style = "Authoritative Male",    Label = "Arnold — Nam hùng hồn, mạnh mẽ", Provider = "ElevenLabs", IsDefault = false },
+        new() { Id = "Sam",     Name = "Sam",     Style = "Dynamic Male",          Label = "Sam — Nam năng động, biểu cảm", Provider = "ElevenLabs", IsDefault = false },
 
         // ── Google Gemini Standard Voices ──────────────────────────────────────
-        new() { Id = "Charon",      Name = "Charon",      Style = "Informative / Firm", Label = "Adam-like (Mặc định TikTok) ★", Provider = "Google Gemini", IsDefault = true  },
+        new() { Id = "Charon",      Name = "Charon",      Style = "Informative / Firm", Label = "Charon (Mặc định TikTok)", Provider = "Google Gemini", IsDefault = true  },
         new() { Id = "Puck",        Name = "Puck",        Style = "Upbeat",             Label = "Puck — Vui tươi, năng động",     Provider = "Google Gemini", IsDefault = false },
         new() { Id = "Kore",        Name = "Kore",        Style = "Firm",               Label = "Kore — Dứt khoát, chuyên nghiệp", Provider = "Google Gemini", IsDefault = false },
         new() { Id = "Fenrir",      Name = "Fenrir",      Style = "Excitable",          Label = "Fenrir — Sôi nổi, cuốn hút",      Provider = "Google Gemini", IsDefault = false },

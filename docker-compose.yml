@@ -1,16 +1,47 @@
 version: '3.8'
 
 services:
+  # .NET 10 Minimal API Backend
   backend:
     build:
       context: ./backend
       dockerfile: Dockerfile
+    container_name: minhtts-backend
+    restart: unless-stopped
     ports:
-      - "5027:8080"
+      - "5027:5027"
     environment:
       - ASPNETCORE_ENVIRONMENT=Production
-      - Gemini__ApiKey=${GEMINI_API_KEY}
-      - Gemini__Model=gemini-3.1-flash-tts-preview
-      - AllowedOrigins__0=http://localhost:5173
-      - AllowedOrigins__1=http://localhost:3000
+      - ASPNETCORE_URLS=http://+:5027
+      - ConnectionStrings__DefaultConnection=Data Source=/app/data/minhtts.db
+      - LocalTts__Endpoint=http://local_engine:8000
+    volumes:
+      - minhtts_data:/app/data
+      - minhtts_audio:/app/App_Data/audio_library
+    depends_on:
+      - local_engine
+
+  # Python Local Inference Engine (FastAPI)
+  local_engine:
+    build:
+      context: ./local_engine
+      dockerfile: Dockerfile
+    container_name: minhtts-local-engine
     restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      - PORT=8000
+      - CUDA_VISIBLE_DEVICES=0
+    # Enable NVIDIA GPU inside Docker if running on Linux with nvidia-container-toolkit
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+
+volumes:
+  minhtts_data:
+  minhtts_audio:

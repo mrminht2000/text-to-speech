@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
+import { useAuth } from '../context/AuthContext';
 
 interface Props {
   value: string;
@@ -6,6 +7,8 @@ interface Props {
   maxLength?: number;
   disabled?: boolean;
   isMarkdownSupported?: boolean;
+  isByok?: boolean;
+  onOpenPricing?: () => void;
 }
 
 const QUICK_TAGS = [
@@ -53,10 +56,13 @@ function renderSimpleMarkdown(text: string): string {
 export function TextInput({
   value,
   onChange,
-  maxLength = 5000,
+  maxLength = 15000,
   disabled,
   isMarkdownSupported = false,
+  isByok = false,
+  onOpenPricing,
 }: Props) {
+  const { user } = useAuth();
   const [activeTab, setActiveTab] = useState<'edit' | 'preview'>('edit');
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -67,9 +73,13 @@ export function TextInput({
     }
   }, [isMarkdownSupported]);
 
+  // Word count & Tier limits
+  const wordCount = value.trim() ? value.trim().split(/\s+/).length : 0;
+  const maxWordsAllowed = isByok ? 20000 : (user?.maxWordsPerRequest || 100);
+  const isOverWordLimit = wordCount > maxWordsAllowed;
+  const isNearWordLimit = wordCount > maxWordsAllowed * 0.85;
+
   const count = value.length;
-  const isNearLimit = count > maxLength * 0.9;
-  const isOverLimit = count > maxLength;
 
   const handleInsertTag = (tagText: string) => {
     if (!textareaRef.current) {
@@ -136,7 +146,7 @@ export function TextInput({
         <textarea
           ref={textareaRef}
           id="tts-text-input"
-          className="text-input"
+          className={`text-input ${isOverWordLimit ? 'input-error-border' : ''}`}
           value={value}
           onChange={(e) => onChange(e.target.value)}
           placeholder={
@@ -157,17 +167,34 @@ export function TextInput({
         />
       )}
 
+      {/* Word Limit Warning Banner */}
+      {isOverWordLimit && (
+        <div className="word-limit-warning">
+          <span>⚠️ Văn bản hiện có <strong>{wordCount} từ</strong>, vượt quá giới hạn <strong>{maxWordsAllowed} từ/lượt</strong> của {isByok ? 'hệ thống' : `gói ${(user?.tier || 'Free').toUpperCase()}`}.</span>
+          {!isByok && onOpenPricing && (
+            <button type="button" className="upgrade-inline-btn" onClick={onOpenPricing}>
+              💎 Nâng cấp gói ngay
+            </button>
+          )}
+        </div>
+      )}
+
       <div className="input-footer-row">
         <span className="markdown-hint">
           {isMarkdownSupported
             ? '💡 Hỗ trợ cú pháp Markdown chuẩn & Expressive Audio Tags độc quyền của Gemini 3.1'
             : '💡 Nhập văn bản tiếng Việt để mô hình tổng hợp giọng đọc chuẩn xác'}
         </span>
-        <div
-          id="char-count"
-          className={`char-count ${isNearLimit ? 'warning' : ''} ${isOverLimit ? 'error' : ''}`}
-        >
-          {count.toLocaleString()} / {maxLength.toLocaleString()} ký tự
+        <div className="input-counters">
+          <div className={`word-count-badge ${isNearWordLimit ? 'warning' : ''} ${isOverWordLimit ? 'error' : ''}`}>
+            📝 {wordCount} / {isByok ? '20,000' : maxWordsAllowed} từ {isByok ? '(BYOK)' : `(${(user?.tier || 'Free').toUpperCase()})`}
+          </div>
+          <div
+            id="char-count"
+            className="char-count"
+          >
+            {count.toLocaleString()} ký tự
+          </div>
         </div>
       </div>
     </div>

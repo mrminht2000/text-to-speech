@@ -3,6 +3,8 @@ import type { VoiceInfo, ModelInfo, TtsState } from '../types/tts';
 import { fetchVoices, fetchModels, generateSpeech } from '../services/ttsApi';
 
 const STORAGE_KEY_API_KEY = 'viet_tts_custom_api_key';
+const STORAGE_KEY_OPENAI = 'minhtts_openai_key';
+const STORAGE_KEY_ELEVEN = 'minhtts_eleven_key';
 
 export function useTts() {
   const [allVoices, setAllVoices] = useState<VoiceInfo[]>([]);
@@ -48,8 +50,14 @@ export function useTts() {
     if (selectedModel.startsWith('gemini-')) {
       return allVoices.filter((v) => v.provider === 'Google Gemini');
     }
+    if (selectedModel.startsWith('tts-1')) {
+      return allVoices.filter((v) => v.provider === 'OpenAI');
+    }
+    if (selectedModel.startsWith('eleven_')) {
+      return allVoices.filter((v) => v.provider === 'ElevenLabs');
+    }
     if (selectedModel === 'vieneu-tts') {
-      return allVoices.filter((v) => v.provider === 'Local Model' && v.id !== 'voice_clone_custom');
+      return allVoices.filter((v) => (v.provider === 'Local GPU' || v.provider === 'Local Model') && v.id !== 'voice_clone_custom');
     }
     if (selectedModel === 'f5-tts-vietnamese') {
       return allVoices.filter((v) => v.id === 'voice_clone_custom');
@@ -96,8 +104,26 @@ export function useTts() {
       return;
     }
 
+    if (selectedModel.startsWith('tts-1')) {
+      const openaiVoices = allVoices.filter((v) => v.provider === 'OpenAI');
+      const exists = openaiVoices.some((v) => v.id === selectedVoice);
+      if (!exists && openaiVoices.length > 0) {
+        setSelectedVoice(openaiVoices[0].id);
+      }
+      return;
+    }
+
+    if (selectedModel.startsWith('eleven_')) {
+      const elevenVoices = allVoices.filter((v) => v.provider === 'ElevenLabs');
+      const exists = elevenVoices.some((v) => v.id === selectedVoice);
+      if (!exists && elevenVoices.length > 0) {
+        setSelectedVoice(elevenVoices[0].id);
+      }
+      return;
+    }
+
     if (selectedModel === 'vieneu-tts') {
-      const localVoices = allVoices.filter((v) => v.provider === 'Local Model' && v.id !== 'voice_clone_custom');
+      const localVoices = allVoices.filter((v) => (v.provider === 'Local GPU' || v.provider === 'Local Model') && v.id !== 'voice_clone_custom');
       const exists = localVoices.some((v) => v.id === selectedVoice);
       if (!exists && localVoices.length > 0) {
         setSelectedVoice(localVoices[0].id);
@@ -170,12 +196,21 @@ export function useTts() {
 
     try {
       const isCloning = selectedModel === 'f5-tts-vietnamese';
+      
+      // Determine appropriate API Key according to Model Provider
+      let activeApiKey = customApiKey.trim();
+      if (selectedModel.startsWith('tts-1')) {
+        activeApiKey = localStorage.getItem(STORAGE_KEY_OPENAI) || activeApiKey;
+      } else if (selectedModel.startsWith('eleven_')) {
+        activeApiKey = localStorage.getItem(STORAGE_KEY_ELEVEN) || activeApiKey;
+      }
+
       const { blob, usage } = await generateSpeech({
         text,
         voice: selectedVoice,
         speed,
         model: selectedModel,
-        apiKey: customApiKey.trim() || undefined,
+        apiKey: activeApiKey || undefined,
         referenceAudioBase64: isCloning ? (referenceAudio || undefined) : undefined,
         referenceText: isCloning ? (referenceText || undefined) : undefined,
       });
@@ -200,14 +235,16 @@ export function useTts() {
 
   const download = useCallback(() => {
     if (!state.audioBlob) return;
+    const isWav = selectedModel === 'vieneu-tts' || selectedModel === 'f5-tts-vietnamese';
+    const ext = isWav ? 'wav' : 'mp3';
     const url = URL.createObjectURL(state.audioBlob);
     const anchor = document.createElement('a');
     anchor.href = url;
-    anchor.download = 'output.mp3';
+    anchor.download = `minhtts_audio.${ext}`;
     document.body.appendChild(anchor);
     anchor.click();
     anchor.remove();
-  }, [state.audioBlob]);
+  }, [state.audioBlob, selectedModel]);
 
   return {
     voices,

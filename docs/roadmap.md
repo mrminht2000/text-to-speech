@@ -11,35 +11,45 @@
 
 ---
 
-## 🚀 Phase 2: Tích hợp Local Model Tiếng Việt & Voice Cloning (Hiện tại)
-- [ ] **Nghiên cứu & Chuẩn hóa 3 dòng Local Model**:
-  - **F5-TTS Vietnamese** (Flow Matching SOTA, hỗ trợ Zero-shot Voice Cloning từ file audio mẫu 3–10s).
-  - **VieNeu-TTS** (Chất giọng 3 miền Bắc - Trung - Nam, siêu nhanh).
-  - **VietTTS Lightweight** (Chạy mượt trên CPU máy tính không cần GPU).
-- [ ] **Kiến trúc Local Inference Engine**:
-  - Module Python Service (FastAPI / gRPC) độc lập, giao tiếp với .NET 10 qua HTTP Client.
-  - Tự động phát hiện GPU (NVIDIA CUDA / DirectML / CPU Fallback).
-- [ ] **Tính năng Voice Cloning (Nhân bản giọng nói)** trên UI:
+## 🚀 Phase 2: Tích hợp Local Model Tiếng Việt & Voice Cloning (Hoàn thành)
+- [x] **Nghiên cứu & Chuẩn hóa các dòng Local Model**:
+  - **VieNeu-TTS v3 Turbo**: Chất giọng chuẩn 3 miền Bắc (Minh Đức, Trúc Ly), Trung (Quang Sơn, Ngọc Trân), Nam (Minh Triết, Thục Đoan).
+  - **F5-TTS Voice Cloning**: Nhân bản giọng nói từ audio mẫu 3–10s trên PyTorch Tensor Memory.
+- [x] **Tăng tốc phần cứng NVIDIA GPU (RTX 3060 CUDA 12.6)**:
+  - Tự động nhận diện GPU `device="cuda"`, tối ưu hóa `onnxruntime-gpu 1.24.1` (Speaker Encoder + Denoiser trên CUDA).
+  - Khắc phục 100% lỗi TorchCodec / FFmpeg DLL bằng kỹ thuật Tensor-based In-Memory Speaker Embedding.
+- [x] **Tính năng Voice Cloning (Nhân bản giọng nói)** trên UI:
   - Cho phép người dùng tải lên 1 đoạn ghi âm giọng nói mẫu (.mp3, .wav) và nhập văn bản để model F5-TTS đọc bằng chính giọng mẫu đó.
-- [ ] **Tích hợp Catalog & Dynamic Routing**:
+- [x] **Tích hợp Catalog & Dynamic Routing**:
   - Backend tự động chuyển tiếp request đến `GeminiTtsService` hoặc `LocalTtsService` tùy theo model được chọn.
 
 ---
 
-## 👥 Phase 3: Hệ Thống Đăng Nhập, Lịch Sử & Phân Quyền Hạng Gói (Tương lai)
-- [ ] **Xác thực Authentication**: Đăng nhập qua Google OAuth 2.0, Facebook OAuth, Email / Mật khẩu (JWT).
-- [ ] **Cơ sở dữ liệu Database**: SQLite (nhẹ cho Local) / PostgreSQL + Entity Framework Core. Infras chạy thông qua docker.
-- [ ] **Lưu lịch sử & Audio Library**: Quản lý các đoạn văn bản đã tạo, phát lại, tải xuống, quản lý giới hạn token theo từng gói, quản lý api token cá nhân.
-- [ ] **Phân quyền người dùng theo Hạng (Tiers)**:
-  - **Free**: Tối đa 100 từ / lượt, tổng tối đa tổng cộng 2000 token/ngày.
-  - **Basic**: Tối đa 1.000 từ / lượt, tổng tối đa 10000 token/ngày.
-  - **Pro**: Tối đa 5.000 từ / lượt, tổng tối đa 30000 token/ngày.
-  - **Ultra**: Không giới hạn độ dài từ, không giới hạn.
-  **Chú ý**: Giới hạn token không bao gồm các yêu cầu có nhãn "Sử dụng API Key cá nhân (BYOK)"
-- [ ] **Trang Quản trị Admin Dashboard**: Xem danh sách người dùng, cấp quyền / nâng hạng tài khoản.
+## 👥 Phase 3: Hệ Thống Đăng Nhập, Lịch Sử & Phân Quyền Hạng Gói (Hoàn thành)
+- [x] **Xác thực Authentication**: Đăng ký, Đăng nhập Email/Mật khẩu (BCrypt + JWT), Hỗ trợ Google OAuth, Tự động liên kết / hủy liên kết tài khoản Google.
+- [x] **Cơ sở dữ liệu Database**: Entity Framework Core + SQLite (`minhtts.db`) / PostgreSQL, tự động tạo bảng và seed Admin (`admin@minhtts.dev`).
+- [x] **Lưu lịch sử & Audio Library**:
+  - Tự động lưu file âm thanh vào `App_Data/audio_library/` và quản lý danh sách lịch sử.
+  - Giao diện Thư viện âm thanh (Audio Library Tab): Nghe thử trực tiếp, tải về, sao chép prompt, xóa từng bản ghi hoặc xóa tất cả.
+- [x] **Phân quyền người dùng theo Hạng (Tiers)**:
+  - **Free**: Tối đa 100 từ / lượt, 2.000 token / ngày.
+  - **Basic**: Tối đa 1.000 từ / lượt, 10.000 token / ngày.
+  - **Pro**: Tối đa 5.000 từ / lượt, 30.000 token / ngày.
+  - **Ultra**: Không giới hạn số từ và số token.
+  - ⚡ **Quy tắc miễn trừ BYOK**: Yêu cầu sử dụng API Key cá nhân hoàn toàn KHÔNG bị trừ vào hạn mức token hàng ngày trên mọi gói.
+- [x] **Trang Quản trị Admin Dashboard**: Xem thống kê hệ thống, danh sách người dùng, cấp quyền / nâng hạng tài khoản, điều chỉnh hạn mức từ và token của từng gói.
+- [x] **Giao diện Studio Dashboard Hiện Đại**: Hỗ trợ đầy đủ Dark Mode & Light Mode cực nét, song ngữ Tiếng Việt & Tiếng Anh, Dropdown menu chuẩn stacking context.
 
 ---
 
-## 🌐 Phase 4: Mở Rộng Đa Nhà Cung Cấp Cloud (BYOK OpenAI & ElevenLabs)
-- [ ] **OpenAI TTS Integration**: Hỗ trợ model `tts-1`, `tts-1-hd` với 6 giọng Alloy, Echo, Fable, Onyx, Nova, Shimmer (Người dùng tự nhập OpenAI Key).
-- [ ] **ElevenLabs Integration**: Hỗ trợ `eleven_multilingual_v2` với giọng Adam gốc phòng thu (Người dùng tự nhập ElevenLabs Key).
+## 🌐 Phase 4: Mở Rộng Đa Nhà Cung Cấp Cloud (BYOK OpenAI & ElevenLabs) (Hoàn thành)
+- [x] **OpenAI TTS Integration**:
+  - Hỗ trợ model `tts-1` (tiêu chuẩn) và `tts-1-hd` (độ nét cao).
+  - 6 Giọng đọc chuẩn studio: `Alloy`, `Echo`, `Fable`, `Onyx`, `Nova`, `Shimmer`.
+  - Tích hợp `OpenAiTtsService`, tự động chuyển tiếp và cấu hình OpenAI API Key trong Tab Quản lý API Key.
+- [x] **ElevenLabs TTS Integration**:
+  - Hỗ trợ `eleven_multilingual_v2` và `eleven_turbo_v2_5`.
+  - 8 Giọng đọc huyền thoại: `Adam` (gốc phòng thu), `Rachel`, `Antoni`, `Bella`, `Elli`, `Josh`, `Arnold`, `Sam`.
+  - Tích hợp `ElevenLabsTtsService`, tự động cấu hình ElevenLabs API Key trong Tab Quản lý API Key.
+- [x] **Bộ định tuyến Dynamic Routing 4 trong 1**:
+  - Tự động nhận diện và chuyển tiếp request đến `GeminiTtsService`, `LocalTtsService`, `OpenAiTtsService`, hoặc `ElevenLabsTtsService`.

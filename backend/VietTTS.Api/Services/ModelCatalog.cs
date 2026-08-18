@@ -6,19 +6,20 @@ public static class ModelCatalog
 {
     public static readonly IReadOnlyList<ModelInfo> Models = new List<ModelInfo>
     {
+        // 1. Google Gemini Cloud
         new()
         {
             Id = "gemini-2.5-flash-preview-tts",
-            Name = "Gemini 2.5 Flash Preview TTS",
+            Name = "Gemini 2.5 Flash TTS",
             Provider = "Google Gemini",
-            Description = "Tiết kiệm token nhất (0.50$/1M tokens), độ trễ thấp, ổn định",
+            Description = "Mô hình tối ưu chi phí và độ trễ thấp, phát âm tiếng Việt tự nhiên",
             IsDefault = true,
             IsAvailable = true
         },
         new()
         {
             Id = "gemini-2.5-pro-preview-tts",
-            Name = "Gemini 2.5 Pro Preview TTS",
+            Name = "Gemini 2.5 Pro TTS",
             Provider = "Google Gemini",
             Description = "Mô hình cao cấp, phát âm chuẩn độ chân thực cao, hỗ trợ văn bản dài",
             IsDefault = false,
@@ -27,38 +28,71 @@ public static class ModelCatalog
         new()
         {
             Id = "gemini-3.1-flash-tts-preview",
-            Name = "Gemini 3.1 Flash TTS Preview",
+            Name = "Gemini 3.1 Flash Expressive TTS",
             Provider = "Google Gemini",
-            Description = "Thế hệ mới nhất, giàu biểu cảm, hỗ trợ audio tags [whispers], [laughs]",
+            Description = "Giàu biểu cảm, hỗ trợ audio tags [whispers], [laughs] độc quyền",
+            IsDefault = false,
+            IsAvailable = true
+        },
+
+        // 2. Local GPU Models
+        new()
+        {
+            Id = "vieneu-tts",
+            Name = "VieNeu-TTS (Bắc / Trung / Nam)",
+            Provider = "Local GPU",
+            Description = "Mô hình bản ngữ 3 miền Bắc - Trung - Nam, tốc độ cao trên GPU",
             IsDefault = false,
             IsAvailable = true
         },
         new()
         {
             Id = "f5-tts-vietnamese",
-            Name = "F5-TTS Vietnamese (Voice Cloning)",
-            Provider = "Local Model",
-            Description = "Mô hình Flow Matching SOTA, nhân bản mọi giọng nói từ audio mẫu 3–10 giây",
+            Name = "F5-TTS Voice Cloning",
+            Provider = "Local GPU",
+            Description = "Nhân bản giọng nói tức thì từ audio mẫu 3–10 giây",
+            IsDefault = false,
+            IsAvailable = true
+        },
+
+        // 3. OpenAI TTS (BYOK)
+        new()
+        {
+            Id = "tts-1",
+            Name = "OpenAI TTS-1 (Standard)",
+            Provider = "OpenAI",
+            Description = "Mô hình TTS tiêu chuẩn của OpenAI, độ trễ thấp với 6 giọng studio",
             IsDefault = false,
             IsAvailable = true
         },
         new()
         {
-            Id = "vieneu-tts",
-            Name = "VieNeu-TTS (Bắc / Trung / Nam)",
-            Provider = "Local Model",
-            Description = "Mô hình siêu nhẹ, hỗ trợ đọc chất giọng tự nhiên 3 miền Bắc - Trung - Nam",
+            Id = "tts-1-hd",
+            Name = "OpenAI TTS-1-HD (High Definition)",
+            Provider = "OpenAI",
+            Description = "Mô hình chất lượng cao sắc nét của OpenAI (Cần OpenAI Key)",
             IsDefault = false,
             IsAvailable = true
         },
+
+        // 4. ElevenLabs TTS (BYOK)
         new()
         {
-            Id = "eleven-multilingual-v2",
+            Id = "eleven_multilingual_v2",
             Name = "ElevenLabs Multilingual v2",
             Provider = "ElevenLabs",
-            Description = "Giọng Adam gốc chất lượng phòng thu (Cần API Key riêng - Sắp ra mắt)",
+            Description = "Công nghệ tổng hợp giọng nói hàng đầu thế giới với âm sắc phòng thu (Cần ElevenLabs Key)",
             IsDefault = false,
-            IsAvailable = false
+            IsAvailable = true
+        },
+        new()
+        {
+            Id = "eleven_turbo_v2_5",
+            Name = "ElevenLabs Turbo v2.5",
+            Provider = "ElevenLabs",
+            Description = "Mô hình đa ngôn ngữ tốc độ cao của ElevenLabs",
+            IsDefault = false,
+            IsAvailable = true
         }
     };
 }

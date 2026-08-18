@@ -22,7 +22,7 @@ export function VoiceSelector({ voices, value, onChange, disabled }: Props) {
     <div className="voice-selector-wrapper">
       <div className="voice-header-row">
         <label htmlFor="voice-select" className="control-label">
-          🎙 Giọng đọc AI ({voices.length} giọng)
+          Giọng đọc ({voices.length} giọng)
         </label>
         {currentVoice && (
           <span className="voice-style-tag">{currentVoice.style}</span>

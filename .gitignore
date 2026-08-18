@@ -193,3 +193,4 @@ cloudflared.exe
 tunnel_token.txt
 tunnel.log
 frontend/.env.vercel
+backend/VietTTS.Api/App_Data

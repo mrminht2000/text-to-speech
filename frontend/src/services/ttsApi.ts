@@ -27,9 +27,15 @@ export async function fetchVoices(apiUrl?: string): Promise<VoiceInfo[]> {
 
 export async function generateSpeech(request: TtsRequest, apiUrl?: string): Promise<TtsResponseResult> {
   const base = getApiBase(apiUrl);
+  const token = localStorage.getItem('minhtts_jwt_token');
+  const headers: HeadersInit = {
+    'Content-Type': 'application/json',
+    ...(token ? { Authorization: `Bearer ${token}` } : {})
+  };
+
   const response = await fetch(`${base}/api/tts`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers,
     body: JSON.stringify(request),
   });
 

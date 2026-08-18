@@ -1,3 +1,6 @@
+using System.Security.Claims;
+using VietTTS.Api.Data;
+using VietTTS.Api.Data.Entities;
 using VietTTS.Api.Models;
 using VietTTS.Api.Services;
 
@@ -35,6 +38,16 @@ public static class TtsEndpoints
         .WithSummary("Danh sách mô hình TTS hỗ trợ")
         .Produces(StatusCodes.Status200OK);
 
+        // GET /api/tiers (Public for Pricing page)
+        group.MapGet("/tiers", async (IQuotaService quotaService) =>
+        {
+            var tiers = await quotaService.GetAllTierConfigsAsync();
+            return Results.Ok(tiers);
+        })
+        .WithName("GetTiers")
+        .WithSummary("Danh sách cấu hình các gói dịch vụ")
+        .Produces(StatusCodes.Status200OK);
+
         // POST /api/tts
         group.MapPost("/tts", GenerateSpeech)
         .WithName("GenerateSpeech")
@@ -42,26 +55,39 @@ public static class TtsEndpoints
         .Accepts<TtsRequest>("application/json")
         .Produces(StatusCodes.Status200OK, contentType: "audio/mpeg")
         .Produces(StatusCodes.Status400BadRequest)
+        .Produces(StatusCodes.Status403Forbidden)
         .Produces(StatusCodes.Status502BadGateway);
     }
 
     private static async Task<IResult> GenerateSpeech(
         TtsRequest request,
         ITtsEngineFactory engineFactory,
+        IQuotaService quotaService,
+        IAuthService authService,
+        IAudioStorageService audioStorageService,
+        AppDbContext db,
         HttpContext httpContext,
         CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(request.Text))
-            return Results.BadRequest(new { error = "Text is required.", code = "TEXT_REQUIRED" });
-
-        if (request.Text.Length > 5000)
-            return Results.BadRequest(new { error = "Text exceeds 5000 character limit.", code = "TEXT_TOO_LONG" });
+            return Results.BadRequest(new { error = "Vui lòng nhập văn bản cần đọc.", code = "TEXT_REQUIRED" });
 
         if (!VoiceCatalog.IsValidVoice(request.Voice))
-            return Results.BadRequest(new { error = $"Voice '{request.Voice}' is not supported.", code = "INVALID_VOICE" });
+            return Results.BadRequest(new { error = $"Giọng đọc '{request.Voice}' không hợp lệ.", code = "INVALID_VOICE" });
 
         if (request.Speed < 0.5 || request.Speed > 2.0)
-            return Results.BadRequest(new { error = "Speed must be between 0.5 and 2.0.", code = "INVALID_SPEED" });
+            return Results.BadRequest(new { error = "Tốc độ phải từ 0.5x đến 2.0x.", code = "INVALID_SPEED" });
+
+        // 1. Resolve User and Validate Tier Quotas
+        var user = await authService.GetUserFromClaimsAsync(httpContext.User);
+        var isByok = !string.IsNullOrWhiteSpace(request.ApiKey);
+        var wordCount = request.Text.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries).Length;
+
+        var quotaValidation = quotaService.ValidateRequestQuota(user, wordCount, isByok);
+        if (!quotaValidation.Allowed)
+        {
+            return Results.Json(new { error = quotaValidation.ErrorMessage, code = "QUOTA_EXCEEDED" }, statusCode: StatusCodes.Status403Forbidden);
+        }
 
         try
         {
@@ -71,16 +97,51 @@ public static class TtsEndpoints
             httpContext.Response.Headers["X-Usage-Candidates-Tokens"] = result.Usage.CandidatesTokens.ToString();
             httpContext.Response.Headers["X-Usage-Total-Tokens"] = result.Usage.TotalTokens.ToString();
 
+            // 2. Record Token Usage
+            await quotaService.RecordUsageAsync(user, result.Usage.TotalTokens, isByok);
+
+            // 3. Save Audio History Record and Physical File
+            var historyId = Guid.NewGuid();
+            var isWav = request.Model == "vieneu-tts" || request.Model == "f5-tts-vietnamese";
+            var ext = isWav ? "wav" : "mp3";
+            var contentType = isWav ? "audio/wav" : "audio/mpeg";
+
+            var relativePath = await audioStorageService.SaveAudioAsync(user?.Id, historyId, result.AudioBytes, ext);
+
+            var historyRecord = new AudioHistory
+            {
+                Id = historyId,
+                UserId = user?.Id,
+                Text = request.Text,
+                Model = request.Model ?? "gemini-2.5-flash-preview-tts",
+                Voice = request.Voice,
+                Speed = (float)request.Speed,
+                AudioFilePath = relativePath,
+                ContentType = contentType,
+                FileSizeBytes = result.AudioBytes.Length,
+                DurationSeconds = Math.Round((double)result.AudioBytes.Length / (isWav ? 96000 : 16000), 2),
+                PromptTokens = result.Usage.PromptTokens,
+                CandidateTokens = result.Usage.CandidatesTokens,
+                TotalTokens = result.Usage.TotalTokens,
+                IsByok = isByok,
+                CreatedAt = DateTime.UtcNow
+            };
+
+            await db.AudioHistories.AddAsync(historyRecord, cancellationToken);
+            await db.SaveChangesAsync(cancellationToken);
+
+            httpContext.Response.Headers["X-Audio-History-Id"] = historyId.ToString();
+
             return Results.File(
                 result.AudioBytes,
-                contentType: "audio/mpeg",
-                fileDownloadName: "output.mp3",
+                contentType: contentType,
+                fileDownloadName: $"minhtts_{historyId.ToString()[..8]}.{ext}",
                 enableRangeProcessing: true);
         }
         catch (HttpRequestException ex)
         {
             return Results.Json(
-                new { error = "Không thể kết nối đến dịch vụ TTS Engine. Vui lòng thử lại sau.", detail = ex.Message },
+                new { error = "Không thể kết nối đến dịch vụ TTS Engine. Vui lòng kiểm tra lại dịch vụ cục bộ.", detail = ex.Message },
                 statusCode: StatusCodes.Status502BadGateway);
         }
         catch (InvalidOperationException ex)

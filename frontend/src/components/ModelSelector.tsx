@@ -13,7 +13,7 @@ export function ModelSelector({ models, value, onChange, disabled }: Props) {
   return (
     <div className="model-selector-wrapper">
       <label htmlFor="model-select" className="control-label">
-        🤖 Mô hình AI (TTS Model)
+        Mô hình TTS
       </label>
       <select
         id="model-select"
@@ -21,7 +21,7 @@ export function ModelSelector({ models, value, onChange, disabled }: Props) {
         value={value}
         onChange={(e) => onChange(e.target.value)}
         disabled={disabled}
-        aria-label="Chọn mô hình AI"
+        aria-label="Chọn mô hình TTS"
       >
         {models.map((model) => (
           <option
@@ -29,12 +29,12 @@ export function ModelSelector({ models, value, onChange, disabled }: Props) {
             value={model.id}
             disabled={!model.isAvailable}
           >
-            {model.name} — {model.provider} {!model.isAvailable ? '(Sắp ra mắt)' : ''}
+            {model.name} ({model.provider})
           </option>
         ))}
       </select>
       {currentModel && (
-        <span className="model-desc">ℹ️ {currentModel.description}</span>
+        <span className="model-desc">{currentModel.description}</span>
       )}
     </div>
   );

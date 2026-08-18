@@ -14,6 +14,8 @@ const mockVoices = [
   { id: 'Kore', name: 'Kore', style: 'Firm', label: 'Kore', provider: 'Google Gemini', isDefault: false },
   { id: 'north_female', name: 'Nữ miền Bắc', style: 'Natural', label: 'Trúc Ly', provider: 'Local Model', isDefault: false },
   { id: 'voice_clone_custom', name: 'Custom Voice', style: 'Clone', label: 'Clone', provider: 'Local Model', isDefault: false },
+  { id: 'Alloy', name: 'Alloy', style: 'Neutral', label: 'Alloy', provider: 'OpenAI', isDefault: false },
+  { id: 'Adam', name: 'Adam', style: 'Deep Narration', label: 'Adam', provider: 'ElevenLabs', isDefault: false },
 ];
 
 const mockModels = [
@@ -21,6 +23,8 @@ const mockModels = [
   { id: 'gemini-3.1-flash-tts-preview', name: 'Gemini 3.1 Flash', provider: 'Google Gemini', description: 'Expressive audio', isDefault: false, isAvailable: true },
   { id: 'vieneu-tts', name: 'VieNeu-TTS', provider: 'Local Model', description: 'Local 3-region', isDefault: false, isAvailable: true },
   { id: 'f5-tts-vietnamese', name: 'F5-TTS', provider: 'Local Model', description: 'Voice clone', isDefault: false, isAvailable: true },
+  { id: 'tts-1', name: 'OpenAI TTS-1', provider: 'OpenAI', description: 'Standard latency', isDefault: false, isAvailable: true },
+  { id: 'eleven_multilingual_v2', name: 'ElevenLabs Multilingual v2', provider: 'ElevenLabs', description: 'Studio quality', isDefault: false, isAvailable: true },
 ];
 
 describe('useTts', () => {
@@ -74,6 +78,34 @@ describe('useTts', () => {
 
     expect(result.current.voices).toEqual([mockVoices[3]]);
     expect(result.current.selectedVoice).toBe('voice_clone_custom');
+  });
+
+  it('filters voices for OpenAI models when switched', async () => {
+    const { result } = renderHook(() => useTts());
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    act(() => {
+      result.current.setSelectedModel('tts-1');
+    });
+
+    expect(result.current.voices).toEqual([mockVoices[4]]);
+    expect(result.current.selectedVoice).toBe('Alloy');
+  });
+
+  it('filters voices for ElevenLabs models when switched', async () => {
+    const { result } = renderHook(() => useTts());
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    act(() => {
+      result.current.setSelectedModel('eleven_multilingual_v2');
+    });
+
+    expect(result.current.voices).toEqual([mockVoices[5]]);
+    expect(result.current.selectedVoice).toBe('Adam');
   });
 
   it('sets error on empty text generate', async () => {

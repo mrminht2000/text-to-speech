@@ -1,17 +1,21 @@
 import { useState } from 'react';
 import { useTts } from './hooks/useTts';
-import { TextInput } from './components/TextInput';
-import { ModelSelector } from './components/ModelSelector';
-import { VoiceSelector } from './components/VoiceSelector';
-import { VoiceCloner } from './components/VoiceCloner';
-import { SpeedSlider } from './components/SpeedSlider';
-import { ProgressBar } from './components/ProgressBar';
-import { UsageBadge } from './components/UsageBadge';
-import { AudioPlayer } from './components/AudioPlayer';
-import { ApiKeySettings } from './components/ApiKeySettings';
+import { useAuth } from './context/AuthContext';
+import { useLanguage } from './context/LanguageContext';
+import { UserMenu } from './components/UserMenu';
+import { AuthModal } from './components/AuthModal';
+import { TtsStudioTab } from './components/Tabs/TtsStudioTab';
+import { ApiKeyManagerTab } from './components/Tabs/ApiKeyManagerTab';
+import { AudioLibraryTab } from './components/Tabs/AudioLibraryTab';
+import { PricingTiersTab } from './components/Tabs/PricingTiersTab';
+import { AdminDashboardTab } from './components/Tabs/AdminDashboardTab';
 
 export function App() {
+  const [activeTab, setActiveTab] = useState<string>('studio');
   const [text, setText] = useState('');
+
+  const { user, refreshUser } = useAuth();
+  const { t } = useLanguage();
 
   const {
     voices,
@@ -32,140 +36,152 @@ export function App() {
     generate,
   } = useTts();
 
-  const handleGenerate = () => {
-    generate(text);
+  const handleGenerate = async () => {
+    await generate(text);
+    refreshUser();
   };
 
-  const isMarkdownSupported = selectedModel === 'gemini-3.1-flash-tts-preview';
-  const isVoiceCloningModel = selectedModel === 'f5-tts-vietnamese';
+  const isByok = Boolean(customApiKey && customApiKey.trim().length > 0);
+
+  const handleReuseFromLibrary = (snippetText: string) => {
+    setText(snippetText);
+    setActiveTab('studio');
+  };
 
   return (
-    <div className="app">
+    <div className="app wide-dashboard-app">
       {/* Background ambient orbs */}
       <div className="bg-orb bg-orb-1" aria-hidden="true" />
       <div className="bg-orb bg-orb-2" aria-hidden="true" />
       <div className="bg-orb bg-orb-3" aria-hidden="true" />
 
-      <main className="main">
-        {/* Header */}
-        <header className="header">
-          <div className="logo">
+      <main className="main wide-dashboard-main">
+        {/* Top Header Bar */}
+        <header className="header top-navbar-glass">
+          <div className="logo" onClick={() => setActiveTab('studio')} style={{ cursor: 'pointer' }}>
             <span className="logo-icon" role="img" aria-label="Mic">🎙️</span>
             <div>
-              <h1 className="title">MinhTTS Studio</h1>
-              <p className="subtitle">Chuyển đổi văn bản sang giọng nói AI tiếng Việt cao cấp</p>
+              <h1 className="title">{t('app_title')}</h1>
+              <p className="subtitle">{t('app_subtitle')}</p>
             </div>
           </div>
-          <span className="badge">AI Audio</span>
+          
+          <div className="header-right-actions">
+            <UserMenu onNavigateTab={setActiveTab} />
+          </div>
         </header>
 
-        {/* AI API Key Configuration (BYOK) */}
-        <ApiKeySettings
-          apiKey={customApiKey}
-          onSaveApiKey={setCustomApiKey}
-          disabled={state.isLoading}
-        />
+        {/* Studio Dashboard Tab Navigation Bar */}
+        <nav className="dashboard-tabs-navbar">
+          <div className="nav-tabs-container">
+            <button
+              type="button"
+              className={`dashboard-nav-tab ${activeTab === 'studio' ? 'active' : ''}`}
+              onClick={() => setActiveTab('studio')}
+            >
+              <span className="tab-icon">🎙️</span>
+              <span className="tab-label">{t('tab_studio')}</span>
+            </button>
 
-        {/* Main Interactive Glassmorphism Card */}
-        <div className="card">
-          {/* Text Input with Model-specific Markdown Support */}
-          <div className="section">
-            <TextInput
-              value={text}
-              onChange={setText}
-              disabled={state.isLoading}
-              maxLength={5000}
-              isMarkdownSupported={isMarkdownSupported}
-            />
-          </div>
+            <button
+              type="button"
+              className={`dashboard-nav-tab ${activeTab === 'api_keys' ? 'active' : ''}`}
+              onClick={() => setActiveTab('api_keys')}
+            >
+              <span className="tab-icon">🔑</span>
+              <span className="tab-label">{t('tab_api_keys')}</span>
+              {isByok && <span className="tab-dot-badge" title="BYOK Đang Bật" />}
+            </button>
 
-          {/* Model & Voice selection */}
-          <div className="controls-row">
-            <div className="control-group">
-              <ModelSelector
-                models={models}
-                value={selectedModel}
-                onChange={setSelectedModel}
-                disabled={state.isLoading}
-              />
-            </div>
+            <button
+              type="button"
+              className={`dashboard-nav-tab ${activeTab === 'library' ? 'active' : ''}`}
+              onClick={() => setActiveTab('library')}
+            >
+              <span className="tab-icon">📚</span>
+              <span className="tab-label">{t('tab_library')}</span>
+            </button>
 
-            {/* Voice selector only shown for models with preset voices */}
-            {!isVoiceCloningModel && (
-              <div className="control-group">
-                <VoiceSelector
-                  voices={voices}
-                  value={selectedVoice}
-                  onChange={setSelectedVoice}
-                  disabled={state.isLoading}
-                />
-              </div>
+            <button
+              type="button"
+              className={`dashboard-nav-tab ${activeTab === 'pricing' ? 'active' : ''}`}
+              onClick={() => setActiveTab('pricing')}
+            >
+              <span className="tab-icon">💎</span>
+              <span className="tab-label">{t('tab_pricing')}</span>
+            </button>
+
+            {user?.role === 'admin' && (
+              <button
+                type="button"
+                className={`dashboard-nav-tab admin-tab ${activeTab === 'admin' ? 'active' : ''}`}
+                onClick={() => setActiveTab('admin')}
+              >
+                <span className="tab-icon">🛡️</span>
+                <span className="tab-label">{t('tab_admin')}</span>
+              </button>
             )}
           </div>
+        </nav>
 
-          {/* Voice Cloner (Displayed only for Voice Cloning model) */}
-          {isVoiceCloningModel && (
-            <VoiceCloner
+        {/* Tab Views */}
+        <div className="tab-view-container">
+          {activeTab === 'studio' && (
+            <TtsStudioTab
+              text={text}
+              onTextChange={setText}
+              models={models}
+              selectedModel={selectedModel}
+              onModelChange={setSelectedModel}
+              voices={voices}
+              selectedVoice={selectedVoice}
+              onVoiceChange={setSelectedVoice}
               referenceAudio={referenceAudio}
               onReferenceAudioChange={setReferenceAudio}
               referenceText={referenceText}
               onReferenceTextChange={setReferenceText}
-              disabled={state.isLoading}
+              speed={speed}
+              onSpeedChange={setSpeed}
+              state={state}
+              onGenerate={handleGenerate}
+              isByok={isByok}
+              onOpenPricing={() => setActiveTab('pricing')}
             />
           )}
 
-          {/* Speed slider */}
-          <SpeedSlider
-            value={speed}
-            onChange={setSpeed}
-            disabled={state.isLoading}
-          />
-
-          {/* Generate Button */}
-          <button
-            type="button"
-            className={`btn-generate ${state.isLoading ? 'loading' : ''}`}
-            onClick={handleGenerate}
-            disabled={state.isLoading || !text.trim()}
-            id="btn-generate-speech"
-          >
-            {state.isLoading ? (
-              <>
-                <span className="spinner" />
-                Đang tổng hợp giọng đọc...
-              </>
-            ) : (
-              '▶ Chuyển thành giọng nói'
-            )}
-          </button>
-
-          {/* Progress bar */}
-          {state.isLoading && <ProgressBar progress={state.progress} model={selectedModel} />}
-
-          {/* Error Message */}
-          {state.error && (
-            <div className="error-banner" role="alert">
-              ⚠️ {state.error}
-            </div>
+          {activeTab === 'api_keys' && (
+            <ApiKeyManagerTab
+              apiKey={customApiKey}
+              onSaveApiKey={setCustomApiKey}
+            />
           )}
 
-          {/* Audio Player */}
-          {state.audioUrl && (
-            <AudioPlayer audioUrl={state.audioUrl} />
+          {activeTab === 'library' && (
+            <AudioLibraryTab
+              onReuseText={handleReuseFromLibrary}
+            />
           )}
 
-          {/* Token Usage Badge */}
-          {state.usage && <UsageBadge usage={state.usage} />}
+          {activeTab === 'pricing' && (
+            <PricingTiersTab />
+          )}
+
+          {activeTab === 'admin' && user?.role === 'admin' && (
+            <AdminDashboardTab />
+          )}
         </div>
 
         {/* Footer */}
-        <footer className="footer">
+        <footer className="footer wide-footer">
           <p>
-            Tác giả: <strong>Zygardoge (Nguyen Ngoc Minh)</strong> — Email:{' '}
+            MinhTTS Studio © 2026 — Phát triển bởi <strong>Zygardoge (Nguyen Ngoc Minh)</strong> • Email:{' '}
             <a href="mailto:mrminht2000@gmail.com">mrminht2000@gmail.com</a>
           </p>
         </footer>
       </main>
+
+      {/* Global Auth Modal */}
+      <AuthModal />
     </div>
   );
 }
