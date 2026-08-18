@@ -1,221 +1,86 @@
 """
-MinhTTS — Local Python Inference Service (FastAPI) v4.1
-State-of-the-Art Vietnamese Neural Speech Synthesis & Natural Voice Cloning.
-
-Architecture:
-- VieNeu-TTS v3 Turbo (PyTorch bfloat16) chạy trên NVIDIA RTX 3060 GPU
-- ONNX Speaker Encoder + Denoiser được patch sang CUDAExecutionProvider sau khi load
-  (VieNeu hard-codes CPUExecutionProvider — patch này là bắt buộc để đạt tốc độ GPU thật sự)
-- torch.backends.cudnn.benchmark = True — CUDA kernel auto-tune cho từng input shape
-- Tensor-based In-Memory Voice Cloning (no TorchCodec / FFmpeg DLL dependency)
-- Native GPU batching via VieNeu's internal batch_size=32 scheduler
-- Thread-safe singleton với asyncio.Lock + double-checked locking
-- Non-blocking: inference chạy trong ThreadPoolExecutor riêng, không block event loop
-
-CUDA compatibility:
-  - PyTorch:        torch >= 2.4.0+cu126
-  - ONNX Runtime:   onnxruntime-gpu == 1.24.1  ← phải đúng version này cho CUDA 12.6
-  - cuDNN:          9.x (đi kèm torch cu126)
+MinhTTS — Local Python Inference Service (FastAPI) v5.0
+High-Performance Modular Speech Synthesis Engine for NVIDIA RTX 3060 / CUDA 12.6.
 """
 
 from __future__ import annotations
 
 import asyncio
-import base64
 import io
 import logging
 import os
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager
-from typing import Optional
+from typing import Any, Optional
 
 import numpy as np
 import soundfile as sf
 import torch
-from fastapi import FastAPI, HTTPException, Response
+from fastapi import FastAPI, File, Form, HTTPException, Request, Response, UploadFile, status
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
+from config import (
+    DEFAULT_MODEL,
+    DEFAULT_VOICE,
+    EXECUTOR_WORKERS,
+    HOST,
+    MAX_TEXT_LENGTH,
+    PORT,
+    VOICE_MAP,
+    VOICE_METADATA,
+)
+from core.audio_utils import decode_ref_audio, encode_wav, estimate_duration_seconds
+from core.registry import get_model_registry
+from models.f5tts_model import F5TTSModel
+from models.vieneu_model import VieNeuModel
+from models.whisper_model import WhisperASRModel
+
 # ---------------------------------------------------------------------------
-# Logging
+# Logging Setup
 # ---------------------------------------------------------------------------
 logging.basicConfig(
     level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(message)s",
+    format="%(asctime)s [%(levelname)s] [%(name)s] %(message)s",
 )
-logger = logging.getLogger("MinhTTS")
+logger = logging.getLogger("MinhTTS.Server")
 
 # ---------------------------------------------------------------------------
-# Thread pool: one dedicated thread for GPU-bound synthesis (avoid GIL contention)
+# Dedicated ThreadPoolExecutor for CPU/GPU-bound tasks
 # ---------------------------------------------------------------------------
-_executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="vieneu-gpu")
-
-# ---------------------------------------------------------------------------
-# Engine singleton — loaded once, reused forever
-# ---------------------------------------------------------------------------
-_engine_lock = asyncio.Lock()
-_vieneu: object | None | bool = None   # None = not yet loaded; False = failed
-
-
-# ONNX CUDAExecutionProvider config — tuned for RTX 3060 12GB
-_ORT_CUDA_PROVIDERS = [
-    (
-        "CUDAExecutionProvider",
-        {
-            "device_id": 0,
-            "arena_extend_strategy": "kNextPowerOfTwo",
-            "gpu_mem_limit": 2 * 1024 ** 3,   # 2 GB cap for ONNX models
-            "do_copy_in_default_stream": True,
-        },
-    ),
-    "CPUExecutionProvider",   # safe fallback
-]
-
-
-def _patch_onnx_sessions(engine) -> None:
-    """
-    VieNeu hard-codes CPUExecutionProvider for its two ONNX models.
-    Rebuild both sessions with CUDAExecutionProvider so the entire
-    pipeline runs on the GPU (zero CPU↔GPU round-trips during inference).
-
-    Requires: onnxruntime-gpu==1.24.1  (compatible with CUDA 12.6)
-    """
-    import onnxruntime as ort  # noqa: PLC0415
-
-    inner = engine.engine
-    patched: list[str] = []
-
-    # 1. Speaker encoder
-    se = getattr(inner, "speaker_encoder", None)
-    if se is not None and hasattr(se, "session") and hasattr(se, "onnx_path"):
-        try:
-            se.session = ort.InferenceSession(
-                str(se.onnx_path), providers=_ORT_CUDA_PROVIDERS
-            )
-            actual = se.session.get_providers()
-            if "CUDAExecutionProvider" in actual:
-                patched.append(f"speaker_encoder→{actual[0]}")
-        except Exception as exc:
-            logger.warning("speaker_encoder CUDA patch failed: %s", exc)
-
-    # 2. Denoiser
-    d = getattr(inner, "denoiser", None)
-    if d is not None and hasattr(d, "sess"):
-        try:
-            model_path = d.sess._model_path  # ORT stores the path internally
-            d.sess = ort.InferenceSession(model_path, providers=_ORT_CUDA_PROVIDERS)
-            actual = d.sess.get_providers()
-            if "CUDAExecutionProvider" in actual:
-                patched.append(f"denoiser→{actual[0]}")
-        except Exception as exc:
-            logger.warning("denoiser CUDA patch failed: %s", exc)
-
-    if patched:
-        logger.info("🔥 ONNX GPU patch applied: %s", ", ".join(patched))
-    else:
-        logger.warning("⚠️  ONNX GPU patch had no effect — ONNX models may still run on CPU")
-
-
-def _load_engine_sync() -> object | bool:
-    """Blocking model load — call only from the thread-pool executor."""
-    try:
-        # Enable cuDNN auto-tuner: finds the fastest conv kernels for the actual
-        # input shapes used by VieNeu (one-time overhead on first run).
-        torch.backends.cudnn.benchmark = True
-
-        device = "cuda" if torch.cuda.is_available() else "cpu"
-        gpu_label = torch.cuda.get_device_name(0) if device == "cuda" else "CPU"
-        logger.info("🚀 Loading VieNeu on %s ...", gpu_label)
-
-        from vieneu import Vieneu  # noqa: PLC0415
-
-        engine = Vieneu(device=device)
-
-        # Critical: patch ONNX sessions to run on GPU
-        if device == "cuda":
-            _patch_onnx_sessions(engine)
-
-        logger.info(
-            "✅ VieNeu v3 Turbo ready — %s @ %d Hz (max_batch=%d)",
-            gpu_label, engine.sample_rate, engine.max_batch_size,
-        )
-        return engine
-    except Exception as exc:
-        logger.error("❌ VieNeu failed to load: %s", exc, exc_info=True)
-        return False
-
-
-async def get_engine() -> object:
-    """Async-safe singleton getter — loads once, then returns cached instance."""
-    global _vieneu
-    if _vieneu is not None:
-        if _vieneu is False:
-            raise RuntimeError("VieNeu engine is unavailable (load failed at startup).")
-        return _vieneu
-
-    async with _engine_lock:
-        # Double-checked locking
-        if _vieneu is not None:
-            if _vieneu is False:
-                raise RuntimeError("VieNeu engine is unavailable.")
-            return _vieneu
-
-        loop = asyncio.get_running_loop()
-        _vieneu = await loop.run_in_executor(_executor, _load_engine_sync)
-
-    return _vieneu
-
-
-# ---------------------------------------------------------------------------
-# Regional voice presets  (20 native VieNeu speakers)
-# ---------------------------------------------------------------------------
-VOICE_MAP: dict[str, str] = {
-    # Miền Bắc
-    "north_male":    "Minh Đức",    # Nam · Bắc · Tin tức / phát thanh
-    "north_female":  "Trúc Ly",     # Nữ · Bắc · Tự nhiên truyền cảm
-    # Miền Trung
-    "central_male":  "Quang Sơn",   # Nam · Trung · Tự nhiên
-    "central_female":"Ngọc Trân",   # Nữ · Trung · Tự nhiên
-    # Miền Nam
-    "south_male":    "Minh Triết",  # Nam · Nam · Tin tức
-    "south_female":  "Thục Đoan",   # Nữ · Nam · Kể chuyện
-}
-DEFAULT_VOICE = "north_female"
-
-# Optimal inference hyper-parameters for Vietnamese natural speech
-INFER_DEFAULTS = dict(
-    temperature=0.72,       # Slightly higher than 0.65 for more prosodic variety
-    top_k=30,               # Tight nucleus to keep pronunciation stable
-    top_p=0.92,
-    max_new_frames=800,     # Allow longer sentences without truncation
-    repetition_penalty=1.18,
-    silence_p=0.05,         # Low random-silence probability (VieNeu default=0.15)
-    crossfade_p=0.06,       # Light crossfade between chunks for smooth boundaries
-    apply_watermark=False,  # No watermark overhead in production
+_executor = ThreadPoolExecutor(
+    max_workers=EXECUTOR_WORKERS,
+    thread_name_prefix="minhtts-worker",
 )
 
+# ---------------------------------------------------------------------------
+# Model Registry Setup
+# ---------------------------------------------------------------------------
+registry = get_model_registry()
+registry.register(VieNeuModel())
+registry.register(F5TTSModel())
+registry.set_default_model(DEFAULT_MODEL)
+
 
 # ---------------------------------------------------------------------------
-# FastAPI app
+# Lifespan Management
 # ---------------------------------------------------------------------------
 @asynccontextmanager
-async def lifespan(app_: FastAPI):  # noqa: ARG001
-    """Eagerly pre-warm the GPU engine on startup so the first request is fast."""
-    asyncio.create_task(_warmup())
+async def lifespan(app_: FastAPI):
+    """
+    Eagerly load and warmup default models on server startup.
+    """
+    logger.info("🚀 Starting MinhTTS Local Engine v5.0 (RTX 3060 Optimized)...")
+    warmup_task = asyncio.create_task(registry.warmup_all(executor=_executor))
     yield
+    logger.info("🛑 Shutting down MinhTTS Local Engine...")
     _executor.shutdown(wait=False)
-
-
-async def _warmup():
-    try:
-        await get_engine()
-    except Exception as exc:
-        logger.warning("Warmup failed (non-fatal): %s", exc)
 
 
 app = FastAPI(
     title="MinhTTS Local Inference Service",
-    version="4.0.0",
+    description="GPU-accelerated Vietnamese Neural Speech Synthesis & Voice Cloning",
+    version="5.0.0",
     lifespan=lifespan,
 )
 
@@ -228,91 +93,54 @@ app.add_middleware(
 
 
 # ---------------------------------------------------------------------------
-# Request schema
+# Whisper ASR Engine Singleton
+# ---------------------------------------------------------------------------
+_whisper_engine: Optional[WhisperASRModel] = None
+_whisper_lock = asyncio.Lock()
+
+
+async def get_whisper_engine() -> WhisperASRModel:
+    global _whisper_engine
+    if _whisper_engine is not None and _whisper_engine.is_loaded:
+        return _whisper_engine
+
+    async with _whisper_lock:
+        if _whisper_engine is not None and _whisper_engine.is_loaded:
+            return _whisper_engine
+
+        loop = asyncio.get_running_loop()
+        instance = WhisperASRModel(model_size="medium")
+        await loop.run_in_executor(_executor, instance.load)
+        _whisper_engine = instance
+        return _whisper_engine
+
+
+# ---------------------------------------------------------------------------
+# Request & Response Schemas
 # ---------------------------------------------------------------------------
 class SynthesizeRequest(BaseModel):
-    text: str = Field(..., min_length=1, max_length=4096)
+    text: str = Field(..., min_length=1, max_length=MAX_TEXT_LENGTH)
     voice: str = Field(default=DEFAULT_VOICE)
     speed: float = Field(default=1.0, ge=0.5, le=2.0)
-    model: str = Field(default="vieneu-tts")
+    model: str = Field(default=DEFAULT_MODEL)
     reference_audio_base64: Optional[str] = None
-    reference_text: Optional[str] = None   # reserved for future use
+    reference_text: Optional[str] = None
+
+
+class TranscribeRequest(BaseModel):
+    audio_base64: Optional[str] = None
+    language: str = Field(default="vi")
+    word_timestamps: bool = Field(default=True)
+    initial_prompt: Optional[str] = None
 
 
 # ---------------------------------------------------------------------------
-# Audio utilities
-# ---------------------------------------------------------------------------
-def _encode_wav(audio: np.ndarray, sample_rate: int) -> bytes:
-    """Encode float32 ndarray → 16-bit PCM WAV bytes (in-memory, no temp files)."""
-    buf = io.BytesIO()
-    sf.write(buf, audio, sample_rate, format="WAV", subtype="PCM_16")
-    return buf.getvalue()
-
-
-def _decode_ref_audio(raw_b64: str) -> tuple[np.ndarray, int]:
-    """
-    Decode a base64-encoded audio file (any format soundfile supports) into a
-    mono float32 numpy array.  Peak-normalises to -1 dBFS for consistent
-    speaker-embedding quality.
-    """
-    if "," in raw_b64:                      # strip data-URI prefix
-        raw_b64 = raw_b64.split(",", 1)[1]
-    pcm_bytes = base64.b64decode(raw_b64)
-
-    with io.BytesIO(pcm_bytes) as bio:
-        data, sr = sf.read(bio, dtype="float32", always_2d=False)
-
-    if data.ndim > 1:
-        data = data.mean(axis=1)            # stereo → mono
-
-    peak = np.max(np.abs(data))
-    if peak > 0:
-        data = (data / peak) * 0.98        # peak-normalise to -0.18 dBFS
-
-    return data, sr
-
-
-# ---------------------------------------------------------------------------
-# Synthesis workers (synchronous — run inside the thread-pool executor)
-# ---------------------------------------------------------------------------
-def _synth_preset(engine, voice_name: str, text: str) -> bytes:
-    """Synthesize using a VieNeu preset speaker. All chunking/batching handled internally."""
-    wav: np.ndarray = engine.infer(
-        text=text,
-        voice=voice_name,
-        **INFER_DEFAULTS,
-    )
-    return _encode_wav(wav, engine.sample_rate)
-
-
-def _synth_clone(engine, ref_data: np.ndarray, ref_sr: int, text: str) -> bytes:
-    """
-    Voice-clone synthesis.
-    Builds a speaker embedding once from the reference waveform tensor (avoids
-    TorchCodec / file-path round-trips), then passes the voice_dict to infer().
-    """
-    wav_tensor = torch.from_numpy(ref_data).unsqueeze(0)   # (1, T)
-
-    logger.info("🎙️ Pre-encoding speaker profile on GPU (sr=%d Hz) ...", ref_sr)
-    speaker_emb, ref_codes = engine.engine.prepare_reference(
-        wav_tensor, sr=ref_sr, denoise=True,
-    )
-    voice_dict = {"speaker_emb": speaker_emb, "codes": ref_codes}
-
-    wav: np.ndarray = engine.infer(
-        text=text,
-        voice=voice_dict,
-        **INFER_DEFAULTS,
-    )
-    return _encode_wav(wav, engine.sample_rate)
-
-
-# ---------------------------------------------------------------------------
-# Fallback: gTTS (network-only; fires only when VieNeu is broken)
+# gTTS Fallback Provider
 # ---------------------------------------------------------------------------
 def _fallback_gtts(text: str) -> bytes:
-    logger.warning("⚠️  Falling back to gTTS for: %.40s ...", text)
-    from gtts import gTTS  # noqa: PLC0415
+    logger.warning("⚠️ Invoking gTTS network fallback for text: %.40s...", text)
+    from gtts import gTTS
+
     buf = io.BytesIO()
     gTTS(text=text, lang="vi", slow=False).write_to_fp(buf)
     return buf.getvalue()
@@ -323,107 +151,231 @@ def _fallback_gtts(text: str) -> bytes:
 # ---------------------------------------------------------------------------
 @app.get("/health")
 async def health_check():
-    cuda = torch.cuda.is_available()
+    cuda_available = torch.cuda.is_available()
+    device_name = torch.cuda.get_device_name(0) if cuda_available else "CPU"
+    
+    vram_alloc = round(torch.cuda.memory_allocated(0) / (1024 ** 2), 2) if cuda_available else 0
+    vram_res = round(torch.cuda.memory_reserved(0) / (1024 ** 2), 2) if cuda_available else 0
+
     return {
         "status": "ready",
-        "engine": "VieNeu-TTS v3 Turbo + MinhTTS GPU v4.0",
-        "device": torch.cuda.get_device_name(0) if cuda else "CPU",
-        "cuda": cuda,
+        "engine": "MinhTTS Modular GPU Engine v5.0",
+        "device": device_name,
+        "cuda": cuda_available,
+        "gpu_vram_allocated_mb": vram_alloc,
+        "gpu_vram_reserved_mb": vram_res,
+        "models": registry.list_models(),
         "voices": list(VOICE_MAP.keys()),
-        "supported_models": ["vieneu-tts", "f5-tts-vietnamese"],
+        "default_voice": DEFAULT_VOICE,
+        "default_model": DEFAULT_MODEL,
+    }
+
+
+@app.get("/models")
+async def list_models():
+    return {
+        "default_model": DEFAULT_MODEL,
+        "models": registry.list_models(),
+    }
+
+
+@app.get("/voices")
+async def list_voices():
+    return {
+        "default_voice": DEFAULT_VOICE,
+        "voices": [
+            {
+                "id": k,
+                **v,
+            }
+            for k, v in VOICE_METADATA.items()
+        ],
     }
 
 
 @app.post("/synthesize")
 async def synthesize(req: SynthesizeRequest):
     loop = asyncio.get_running_loop()
+    target_model_id = req.model.lower() if req.model else DEFAULT_MODEL
 
-    # Determine mode: voice cloning vs. preset regional
-    is_cloning = (
-        req.model == "f5-tts-vietnamese"
-        or req.voice == "voice_clone_custom"
-    ) and bool(req.reference_audio_base64)
+    # Determine if reference audio is provided
+    has_ref_audio = bool(req.reference_audio_base64 and len(req.reference_audio_base64) > 50)
 
     try:
-        engine = await get_engine()
+        # Load or retrieve model from registry
+        model = await registry.get_or_load_model(target_model_id, executor=_executor)
 
-        if is_cloning:
-            # Decode reference audio on the event-loop (fast CPU op)
-            ref_data, ref_sr = _decode_ref_audio(req.reference_audio_base64)
+        ref_data: Optional[np.ndarray] = None
+        ref_sr: Optional[int] = None
 
-            logger.info(
-                "🎙️ Clone synth: %.40s... | %d segments | sr=%d",
-                req.text, len(req.text.split(".")), ref_sr,
+        if has_ref_audio:
+            # Decode audio in threadpool to prevent event-loop blocking
+            ref_data, ref_sr = await loop.run_in_executor(
+                _executor, decode_ref_audio, req.reference_audio_base64
             )
-            audio_bytes: bytes = await loop.run_in_executor(
-                _executor,
-                _synth_clone,
-                engine, ref_data, ref_sr, req.text,
-            )
-            media_type = "audio/wav"
+            logger.info("🎙️ Voice clone synthesis request (ref_sr=%d Hz)...", ref_sr)
 
-        else:
-            voice_name = VOICE_MAP.get(req.voice, VOICE_MAP[DEFAULT_VOICE])
-            logger.info(
-                "🇻🇳 Preset synth: %.40s... | voice=%s (%s)",
-                req.text, req.voice, voice_name,
+        # Run synthesis in dedicated executor
+        def _execute_synthesis():
+            return model.synthesize(
+                text=req.text,
+                voice=req.voice,
+                speed=req.speed,
+                reference_audio=ref_data,
+                reference_sr=ref_sr,
             )
-            audio_bytes = await loop.run_in_executor(
-                _executor,
-                _synth_preset,
-                engine, voice_name, req.text,
-            )
-            media_type = "audio/wav"
 
-        if not audio_bytes or len(audio_bytes) < 100:
-            raise ValueError("Engine returned empty audio.")
+        wav_bytes, meta = await loop.run_in_executor(_executor, _execute_synthesis)
 
-        # Approximate token usage (character-based, proportional to audio length)
-        char_count = len(req.text)
+        if not wav_bytes or len(wav_bytes) < 100:
+            raise ValueError("TTS engine produced empty audio output.")
+
+        # Calculate metrics
+        duration_sec = meta.get("duration_seconds") or estimate_duration_seconds(
+            wav_bytes, sample_rate=meta.get("sample_rate", 48000)
+        )
+        prompt_tokens = len(req.text)
+        candidate_tokens = int(duration_sec * 25)  # ~25 tokens per second of synthesized speech
+        total_tokens = prompt_tokens + candidate_tokens
+
+        # Ensure all HTTP header values are strict ASCII to prevent HTTP protocol / Starlette encoding issues
+        voice_header = str(req.voice).encode("ascii", "ignore").decode("ascii") or "default"
+        model_header = str(meta.get("model_id", target_model_id)).encode("ascii", "ignore").decode("ascii")
+
         return Response(
-            content=audio_bytes,
-            media_type=media_type,
+            content=wav_bytes,
+            media_type="audio/wav",
             headers={
-                "X-Usage-Prompt-Tokens": str(char_count),
-                "X-Usage-Candidates-Tokens": str(char_count),
-                "X-Usage-Total-Tokens": str(char_count * 2),
+                "X-Usage-Prompt-Tokens": str(prompt_tokens),
+                "X-Usage-Candidates-Tokens": str(candidate_tokens),
+                "X-Usage-Total-Tokens": str(total_tokens),
+                "X-Audio-Duration-Sec": f"{duration_sec:.2f}",
+                "X-Model-Used": model_header,
+                "X-Voice-Used": voice_header,
             },
         )
 
+    except ValueError as val_err:
+        logger.warning("Bad request error: %s", val_err)
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(val_err),
+        )
+
     except Exception as exc:
-        logger.error("Synthesis error: %s", exc, exc_info=True)
+        logger.error("TTS inference error: %s", exc, exc_info=True)
+        # Attempt fallback to gTTS
         try:
-            fb = await loop.run_in_executor(_executor, _fallback_gtts, req.text)
-            char_count = len(req.text)
+            fb_audio = await loop.run_in_executor(_executor, _fallback_gtts, req.text)
+            prompt_tokens = len(req.text)
             return Response(
-                content=fb,
+                content=fb_audio,
                 media_type="audio/mpeg",
                 headers={
-                    "X-Usage-Prompt-Tokens": str(char_count),
-                    "X-Usage-Candidates-Tokens": str(char_count),
-                    "X-Usage-Total-Tokens": str(char_count * 2),
+                    "X-Usage-Prompt-Tokens": str(prompt_tokens),
+                    "X-Usage-Candidates-Tokens": str(prompt_tokens),
+                    "X-Usage-Total-Tokens": str(prompt_tokens * 2),
+                    "X-Model-Used": "gtts-fallback",
                 },
             )
         except Exception as fb_exc:
             raise HTTPException(
-                status_code=500,
-                detail=f"Synthesis failed: {exc} | fallback: {fb_exc}",
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"TTS synthesis failed: {exc} | Fallback error: {fb_exc}",
             ) from exc
 
 
+
+@app.post("/transcribe")
+async def transcribe_audio(
+    request: Request,
+    req: Optional[TranscribeRequest] = None,
+):
+    """
+    Transcribe audio or video payload into structured subtitle segments with word timestamps.
+    Supports either JSON payload (with audio_base64) or direct multipart file upload.
+    """
+    loop = asyncio.get_running_loop()
+    whisper = await get_whisper_engine()
+
+    audio_bytes: Optional[bytes] = None
+    language: str = "vi"
+    word_timestamps: bool = True
+    initial_prompt: Optional[str] = None
+
+    content_type = request.headers.get("content-type", "")
+
+    if "application/json" in content_type:
+        body = await request.json()
+        raw = body.get("audio_base64") or ""
+        if "," in raw:
+            raw = raw.split(",", 1)[1]
+        if raw:
+            import base64
+            audio_bytes = base64.b64decode(raw)
+        language = body.get("language") or language
+        if "word_timestamps" in body:
+            word_timestamps = bool(body.get("word_timestamps"))
+        initial_prompt = body.get("initial_prompt") or initial_prompt
+
+    elif "multipart/form-data" in content_type:
+        form = await request.form()
+        uploaded_file = form.get("file")
+        if uploaded_file and hasattr(uploaded_file, "read"):
+            audio_bytes = await uploaded_file.read()
+        language = str(form.get("language") or language)
+        if "word_timestamps" in form:
+            word_timestamps = str(form.get("word_timestamps")).lower() in ("true", "1")
+        initial_prompt = str(form.get("initial_prompt") or initial_prompt)
+
+    elif req is not None and req.audio_base64:
+        import base64
+        raw = req.audio_base64
+        if "," in raw:
+            raw = raw.split(",", 1)[1]
+        audio_bytes = base64.b64decode(raw)
+        language = req.language or language
+        word_timestamps = req.word_timestamps if req.word_timestamps is not None else word_timestamps
+        initial_prompt = req.initial_prompt or initial_prompt
+
+    if not audio_bytes or len(audio_bytes) < 100:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No valid audio/video data provided for transcription.",
+        )
+
+    try:
+        def _execute_transcription():
+            return whisper.transcribe(
+                audio_input=audio_bytes,
+                language=language,
+                word_timestamps=word_timestamps,
+                initial_prompt=initial_prompt,
+            )
+
+        result = await loop.run_in_executor(_executor, _execute_transcription)
+        return result
+
+    except Exception as exc:
+        logger.error("Transcription error: %s", exc, exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Transcription failed: {exc}",
+        ) from exc
+
+
 # ---------------------------------------------------------------------------
-# Entrypoint
+# Server Entrypoint
 # ---------------------------------------------------------------------------
 if __name__ == "__main__":
     import uvicorn
 
-    port = int(os.environ.get("PORT", 8000))
-    logger.info("Starting MinhTTS v4.0 on port %d ...", port)
+    logger.info("Starting MinhTTS server at http://%s:%d", HOST, PORT)
     uvicorn.run(
         "main:app",
-        host="0.0.0.0",
-        port=port,
-        workers=1,           # Single worker: GPU is not shareable between processes
+        host=HOST,
+        port=PORT,
+        workers=1,  # Single process to preserve dedicated GPU VRAM
         loop="asyncio",
         log_level="info",
     )

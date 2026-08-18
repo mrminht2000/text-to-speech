@@ -9,6 +9,7 @@ export const translations = {
     
     // Main Tabs
     tab_studio: 'Studio Giọng Nói',
+    tab_subtitles: 'Phụ Đề Video AI',
     tab_api_keys: 'Quản lý API Key',
     tab_library: 'Thư viện Âm thanh',
     tab_pricing: 'Bảng Giá & Gói',
@@ -120,6 +121,7 @@ export const translations = {
     
     // Main Tabs
     tab_studio: 'Voice Studio',
+    tab_subtitles: 'AI Video Subtitles',
     tab_api_keys: 'API Keys & BYOK',
     tab_library: 'Audio Library',
     tab_pricing: 'Tiers & Pricing',

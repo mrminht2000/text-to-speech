@@ -8,6 +8,12 @@ using VietTTS.Api.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// Configure Kestrel limits for large audio/video transcription payloads
+builder.WebHost.ConfigureKestrel(options =>
+{
+    options.Limits.MaxRequestBodySize = 100 * 1024 * 1024; // 100 MB
+});
+
 // Services
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddOpenApi();
@@ -73,6 +79,21 @@ builder.Services.AddHttpClient("local_tts", client =>
     client.Timeout = TimeSpan.FromSeconds(120);
 });
 
+builder.Services.AddHttpClient("local_subtitles", client =>
+{
+    client.Timeout = TimeSpan.FromMinutes(5);
+});
+
+builder.Services.AddHttpClient("gemini_subtitles", client =>
+{
+    client.Timeout = TimeSpan.FromMinutes(3);
+});
+
+builder.Services.AddHttpClient("openai_subtitles", client =>
+{
+    client.Timeout = TimeSpan.FromMinutes(3);
+});
+
 builder.Services.AddHttpClient("openai", client =>
 {
     client.Timeout = TimeSpan.FromSeconds(60);
@@ -83,12 +104,13 @@ builder.Services.AddHttpClient("elevenlabs", client =>
     client.Timeout = TimeSpan.FromSeconds(60);
 });
 
-// TTS Services & Engine Factory
+// TTS & Subtitle Services
 builder.Services.AddSingleton<IGeminiTtsService, GeminiTtsService>();
 builder.Services.AddSingleton<ILocalTtsService, LocalTtsService>();
 builder.Services.AddSingleton<IOpenAiTtsService, OpenAiTtsService>();
 builder.Services.AddSingleton<IElevenLabsTtsService, ElevenLabsTtsService>();
 builder.Services.AddSingleton<ITtsEngineFactory, TtsEngineFactory>();
+builder.Services.AddScoped<ISubtitleService, SubtitleService>();
 
 // Phase 3: Auth, Quota, Storage Services
 builder.Services.AddScoped<IAuthService, AuthService>();
@@ -117,6 +139,7 @@ app.MapTtsEndpoints();
 app.MapAuthEndpoints();
 app.MapHistoryEndpoints();
 app.MapAdminEndpoints();
+app.MapSubtitleEndpoints();
 
 app.Run();
 

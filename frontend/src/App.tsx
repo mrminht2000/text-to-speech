@@ -5,6 +5,7 @@ import { useLanguage } from './context/LanguageContext';
 import { UserMenu } from './components/UserMenu';
 import { AuthModal } from './components/AuthModal';
 import { TtsStudioTab } from './components/Tabs/TtsStudioTab';
+import { VideoSubtitlesTab } from './components/Tabs/VideoSubtitlesTab';
 import { ApiKeyManagerTab } from './components/Tabs/ApiKeyManagerTab';
 import { AudioLibraryTab } from './components/Tabs/AudioLibraryTab';
 import { PricingTiersTab } from './components/Tabs/PricingTiersTab';
@@ -85,6 +86,15 @@ export function App() {
 
             <button
               type="button"
+              className={`dashboard-nav-tab ${activeTab === 'subtitles' ? 'active' : ''}`}
+              onClick={() => setActiveTab('subtitles')}
+            >
+              <span className="tab-icon">🎬</span>
+              <span className="tab-label">{t('tab_subtitles')}</span>
+            </button>
+
+            <button
+              type="button"
               className={`dashboard-nav-tab ${activeTab === 'api_keys' ? 'active' : ''}`}
               onClick={() => setActiveTab('api_keys')}
             >
@@ -147,6 +157,10 @@ export function App() {
               isByok={isByok}
               onOpenPricing={() => setActiveTab('pricing')}
             />
+          )}
+
+          {activeTab === 'subtitles' && (
+            <VideoSubtitlesTab />
           )}
 
           {activeTab === 'api_keys' && (
