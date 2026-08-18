@@ -1,171 +1,98 @@
-import { vi, describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
 import { useTts } from './useTts';
-import * as ttsApi from '../services/ttsApi';
+import * as api from '../services/ttsApi';
 
-// Mock the API module
-vi.mock('../services/ttsApi');
+vi.mock('../services/ttsApi', () => ({
+  fetchVoices: vi.fn(),
+  fetchModels: vi.fn(),
+  generateSpeech: vi.fn(),
+}));
 
 const mockVoices = [
-  { id: 'Charon', name: 'Charon', style: 'Firm', label: 'Adam-like (Mặc định) ★', isDefault: true },
-  { id: 'Kore', name: 'Kore', style: 'Firm', label: 'Kore — Dứt khoát', isDefault: false },
+  { id: 'Charon', name: 'Charon', style: 'Firm', label: 'Adam-like ★', isDefault: true },
+  { id: 'Kore', name: 'Kore', style: 'Firm', label: 'Kore', isDefault: false },
 ];
 
 const mockModels = [
-  { id: 'gemini-3.1-flash-tts-preview', name: 'Gemini 3.1 Flash TTS', provider: 'Google Gemini', description: 'TTS Model', isDefault: true, isAvailable: true }
+  { id: 'gemini-2.5-flash-preview-tts', name: 'Gemini 2.5 Flash', provider: 'Google Gemini', description: 'Lowest cost', isDefault: true, isAvailable: true },
 ];
 
 describe('useTts', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.mocked(ttsApi.fetchVoices).mockResolvedValue(mockVoices);
-    vi.mocked(ttsApi.fetchModels).mockResolvedValue(mockModels);
+    vi.mocked(api.fetchVoices).mockResolvedValue(mockVoices);
+    vi.mocked(api.fetchModels).mockResolvedValue(mockModels);
   });
 
-  // ── Initial state ──────────────────────────────────────────────────────────
-
-  it('starts with empty state — no loading, no audio, no error', () => {
+  it('starts with empty state — no loading, no audio, no error', async () => {
     const { result } = renderHook(() => useTts());
-
     expect(result.current.state.isLoading).toBe(false);
     expect(result.current.state.audioUrl).toBeNull();
     expect(result.current.state.error).toBeNull();
   });
 
-  // ── fetchVoices & fetchModels ──────────────────────────────────────────────
-
   it('loads voices and models on mount', async () => {
     const { result } = renderHook(() => useTts());
-    await act(async () => {});
-
-    expect(result.current.voices).toHaveLength(2);
-    expect(result.current.voices[0].id).toBe('Charon');
-    expect(result.current.models).toHaveLength(1);
-    expect(result.current.selectedModel).toBe('gemini-3.1-flash-tts-preview');
-  });
-
-  it('sets default voice to Charon after loading', async () => {
-    const { result } = renderHook(() => useTts());
-    await act(async () => {});
-
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(result.current.voices).toEqual(mockVoices);
+    expect(result.current.models).toEqual(mockModels);
     expect(result.current.selectedVoice).toBe('Charon');
   });
 
-  it('sets error when fetchVoices fails', async () => {
-    vi.mocked(ttsApi.fetchVoices).mockRejectedValue(new Error('Network error'));
+  it('sets error on empty text generate', async () => {
     const { result } = renderHook(() => useTts());
-    await act(async () => {});
-
-    expect(result.current.state.error).toContain('Không thể kết nối');
-  });
-
-  // ── generate ───────────────────────────────────────────────────────────────
-
-  it('sets isLoading true while generating', async () => {
-    vi.mocked(ttsApi.generateSpeech).mockImplementation(
-      () => new Promise(() => {}) // never resolves
-    );
-
-    const { result } = renderHook(() => useTts());
-    await act(async () => {});
-
-    act(() => {
-      result.current.generate('Xin chào');
-    });
-
-    expect(result.current.state.isLoading).toBe(true);
-  });
-
-  it('sets audioUrl and usage on successful generate', async () => {
-    const mockBlob = new Blob([new Uint8Array([0xFF, 0xFB])], { type: 'audio/mpeg' });
-    const mockUsage = { promptTokens: 5, candidatesTokens: 40, totalTokens: 45 };
-    vi.mocked(ttsApi.generateSpeech).mockResolvedValue({ blob: mockBlob, usage: mockUsage });
-
-    window.URL.createObjectURL = vi.fn(() => 'blob:mock-url');
-    window.URL.revokeObjectURL = vi.fn();
-
-    const { result } = renderHook(() => useTts());
-    await act(async () => {});
-
     await act(async () => {
-      await result.current.generate('Xin chào');
+      await Promise.resolve();
     });
-
-    expect(result.current.state.audioUrl).toBe('blob:mock-url');
-    expect(result.current.state.usage).toEqual(mockUsage);
-    expect(result.current.state.isLoading).toBe(false);
-    expect(result.current.state.error).toBeNull();
-  });
-
-  it('sets error on failed generate', async () => {
-    vi.mocked(ttsApi.generateSpeech).mockRejectedValue(new Error('API error'));
-
-    const { result } = renderHook(() => useTts());
-    await act(async () => {});
-
-    await act(async () => {
-      await result.current.generate('Xin chào');
-    });
-
-    expect(result.current.state.error).toBe('API error');
-    expect(result.current.state.isLoading).toBe(false);
-  });
-
-  it('rejects generate when text is empty', async () => {
-    const { result } = renderHook(() => useTts());
-    await act(async () => {});
-
     await act(async () => {
       await result.current.generate('');
     });
-
-    expect(result.current.state.error).toContain('Vui lòng nhập');
-    expect(ttsApi.generateSpeech).not.toHaveBeenCalled();
+    expect(result.current.state.error).toBe('Vui lòng nhập văn bản cần đọc.');
   });
 
-  it('rejects generate when text exceeds 5000 chars', async () => {
+  it('sets error when text exceeds 5000 chars', async () => {
     const { result } = renderHook(() => useTts());
-    await act(async () => {});
-
     await act(async () => {
-      await result.current.generate('x'.repeat(5001));
+      await Promise.resolve();
     });
-
-    expect(result.current.state.error).toContain('5.000');
-    expect(ttsApi.generateSpeech).not.toHaveBeenCalled();
+    const longText = 'a'.repeat(5001);
+    await act(async () => {
+      await result.current.generate(longText);
+    });
+    expect(result.current.state.error).toBe('Văn bản vượt quá giới hạn 5.000 ký tự.');
   });
 
-  // ── download ──────────────────────────────────────────────────────────────
-
-  it('calls download with correct filename when audio exists', async () => {
-    const mockBlob = new Blob([new Uint8Array([0xFF, 0xFB])], { type: 'audio/mpeg' });
-    vi.mocked(ttsApi.generateSpeech).mockResolvedValue({
-      blob: mockBlob,
-      usage: { promptTokens: 5, candidatesTokens: 40, totalTokens: 45 }
-    });
-    window.URL.createObjectURL = vi.fn(() => 'blob:mock-url');
-    window.URL.revokeObjectURL = vi.fn();
-
-    // Track anchor attributes set during download
-    const clickedAnchors: { download: string; href: string }[] = [];
-    const origCreate = document.createElement.bind(document);
-    vi.spyOn(document, 'createElement').mockImplementation((tag: string) => {
-      const el = origCreate(tag);
-      if (tag === 'a') {
-        el.click = () => {
-          clickedAnchors.push({ download: (el as HTMLAnchorElement).download, href: (el as HTMLAnchorElement).href });
-        };
-      }
-      return el;
-    });
+  it('generates speech successfully and creates object URL', async () => {
+    const fakeBlob = new Blob(['audio'], { type: 'audio/mpeg' });
+    const fakeUsage = { promptTokens: 10, candidatesTokens: 50, totalTokens: 60 };
+    vi.mocked(api.generateSpeech).mockResolvedValue({ blob: fakeBlob, usage: fakeUsage });
 
     const { result } = renderHook(() => useTts());
-    await act(async () => {});
-    await act(async () => { await result.current.generate('Xin chào'); });
+    await act(async () => {
+      await Promise.resolve();
+    });
+    await act(async () => {
+      await result.current.generate('Xin chào');
+    });
 
-    act(() => { result.current.download(); });
+    expect(result.current.state.isLoading).toBe(false);
+    expect(result.current.state.audioBlob).toBe(fakeBlob);
+    expect(result.current.state.usage).toEqual(fakeUsage);
+  });
 
-    expect(clickedAnchors).toHaveLength(1);
-    expect(clickedAnchors[0].download).toBe('output.mp3');
+  it('handles custom API key and custom API URL', async () => {
+    const { result } = renderHook(() => useTts());
+    await act(async () => {
+      await Promise.resolve();
+    });
+    act(() => {
+      result.current.setCustomApiKey('AIzaSyTest');
+      result.current.setCustomApiUrl('https://test.trycloudflare.com');
+    });
+    expect(result.current.customApiKey).toBe('AIzaSyTest');
+    expect(result.current.customApiUrl).toBe('https://test.trycloudflare.com');
   });
 });

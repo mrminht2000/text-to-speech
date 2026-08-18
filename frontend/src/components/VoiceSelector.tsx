@@ -8,11 +8,18 @@ interface Props {
 }
 
 export function VoiceSelector({ voices, value, onChange, disabled }: Props) {
+  const currentVoice = voices.find((v) => v.id === value);
+
   return (
     <div className="voice-selector-wrapper">
-      <label htmlFor="voice-select" className="control-label">
-        🎙 Giọng đọc
-      </label>
+      <div className="voice-header-row">
+        <label htmlFor="voice-select" className="control-label">
+          🎙 Giọng đọc AI ({voices.length} giọng)
+        </label>
+        {currentVoice && (
+          <span className="voice-style-tag">{currentVoice.style}</span>
+        )}
+      </div>
       <select
         id="voice-select"
         className="voice-select"
@@ -23,7 +30,7 @@ export function VoiceSelector({ voices, value, onChange, disabled }: Props) {
       >
         {voices.map((voice) => (
           <option key={voice.id} value={voice.id}>
-            {voice.label}
+            {voice.label} ({voice.style})
           </option>
         ))}
       </select>

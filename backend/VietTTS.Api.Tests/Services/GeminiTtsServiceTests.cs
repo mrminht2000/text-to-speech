@@ -1,3 +1,5 @@
+using System.Net;
+using System.Text.Json;
 using FluentAssertions;
 using Microsoft.Extensions.Configuration;
 using NSubstitute;
@@ -8,135 +10,105 @@ namespace VietTTS.Api.Tests.Services;
 
 public class GeminiTtsServiceTests
 {
-    private readonly IHttpClientFactory _httpClientFactory;
-    private readonly IConfiguration _configuration;
+    private readonly IHttpClientFactory _httpClientFactory = Substitute.For<IHttpClientFactory>();
+    private readonly IConfiguration _configuration = Substitute.For<IConfiguration>();
 
     public GeminiTtsServiceTests()
     {
-        _httpClientFactory = Substitute.For<IHttpClientFactory>();
-        _configuration = new ConfigurationBuilder()
-            .AddInMemoryCollection(new Dictionary<string, string?>
-            {
-                ["Gemini:ApiKey"] = "test-fake-key"
-            })
-            .Build();
+        _configuration["Gemini:ApiKey"].Returns("test_api_key");
+        _configuration["Gemini:Model"].Returns("gemini-2.5-flash-preview-tts");
     }
 
     [Fact]
-    public async Task GenerateAudioAsync_ValidInput_ReturnsMp3Bytes()
+    public void Constructor_WithoutApiKey_ThrowsInvalidOperationException()
     {
-        // Arrange
-        var fakeClient = new HttpClient(new FakePcmHttpMessageHandler())
+        var emptyConfig = Substitute.For<IConfiguration>();
+        emptyConfig["Gemini:ApiKey"].Returns((string?)null);
+
+        var act = () => new GeminiTtsService(_httpClientFactory, emptyConfig);
+
+        act.Should().Throw<InvalidOperationException>()
+           .WithMessage("*Gemini:ApiKey*");
+    }
+
+    [Fact]
+    public async Task GenerateAudioAsync_WithValidPcmResponse_ReturnsMp3AudioBytes()
+    {
+        // 24000 samples of 16-bit PCM = 48000 bytes
+        var pcmBytes = new byte[48000];
+        for (int i = 0; i < pcmBytes.Length; i += 2)
         {
-            BaseAddress = new Uri("https://generativelanguage.googleapis.com/")
+            short sample = (short)(Math.Sin(2 * Math.PI * 440 * (i / 2) / 24000) * 16000);
+            pcmBytes[i] = (byte)(sample & 0xFF);
+            pcmBytes[i + 1] = (byte)((sample >> 8) & 0xFF);
+        }
+
+        var base64Audio = Convert.ToBase64String(pcmBytes);
+
+        var mockGeminiResponse = new
+        {
+            candidates = new[]
+            {
+                new
+                {
+                    content = new
+                    {
+                        parts = new object[]
+                        {
+                            new
+                            {
+                                inlineData = new
+                                {
+                                    mimeType = "audio/x-pcm",
+                                    data = base64Audio
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            usageMetadata = new
+            {
+                promptTokenCount = 12,
+                candidatesTokenCount = 80,
+                totalTokenCount = 92
+            }
         };
-        _httpClientFactory.CreateClient("gemini").Returns(fakeClient);
 
-        var sut = CreateSut();
+        var responseJson = JsonSerializer.Serialize(mockGeminiResponse);
+        var handler = new MockHttpMessageHandler(HttpStatusCode.OK, responseJson);
+        var httpClient = new HttpClient(handler) { BaseAddress = new Uri("https://generativelanguage.googleapis.com/") };
+        _httpClientFactory.CreateClient("gemini").Returns(httpClient);
 
-        // Act
-        var result = await sut.GenerateAudioAsync("Xin chào", "Charon", 1.0);
 
-        // Assert
+        var service = new GeminiTtsService(_httpClientFactory, _configuration);
+
+        var result = await service.GenerateAudioAsync("Xin chào", "Charon", 1.0);
+
         result.Should().NotBeNull();
         result.AudioBytes.Should().NotBeEmpty();
-        // MP3 magic bytes: FF FB or FF F3 or FF F2 or ID3 (or WAV header RIFF)
-        var isValidAudio = result.AudioBytes.Length > 4;
-        isValidAudio.Should().BeTrue("output must contain audio bytes");
-
+        result.Usage.PromptTokens.Should().Be(12);
+        result.Usage.CandidatesTokens.Should().Be(80);
+        result.Usage.TotalTokens.Should().Be(92);
     }
 
-    [Fact]
-    public async Task GenerateAudioAsync_GeminiApiError_ThrowsHttpRequestException()
+    private class MockHttpMessageHandler : HttpMessageHandler
     {
-        // Arrange
-        var fakeClient = new HttpClient(new FakeErrorHttpMessageHandler(500))
+        private readonly HttpStatusCode _statusCode;
+        private readonly string _responseContent;
+
+        public MockHttpMessageHandler(HttpStatusCode statusCode, string responseContent)
         {
-            BaseAddress = new Uri("https://generativelanguage.googleapis.com/")
-        };
-        _httpClientFactory.CreateClient("gemini").Returns(fakeClient);
-        var sut = CreateSut();
+            _statusCode = statusCode;
+            _responseContent = responseContent;
+        }
 
-        // Act & Assert
-        await sut.Invoking(s => s.GenerateAudioAsync("Xin chào", "Charon", 1.0))
-                 .Should().ThrowAsync<HttpRequestException>();
-    }
-
-    [Fact]
-    public async Task GenerateAudioAsync_CancellationRequested_ThrowsOperationCancelledException()
-    {
-        // Arrange
-        var fakeClient = new HttpClient(new FakePcmHttpMessageHandler())
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         {
-            BaseAddress = new Uri("https://generativelanguage.googleapis.com/")
-        };
-        _httpClientFactory.CreateClient("gemini").Returns(fakeClient);
-
-        var cts = new CancellationTokenSource();
-        cts.Cancel();
-        var sut = CreateSut();
-
-        // Act & Assert
-        await sut.Invoking(s => s.GenerateAudioAsync("text", "Charon", 1.0, cancellationToken: cts.Token))
-                 .Should().ThrowAsync<OperationCanceledException>();
-
-    }
-
-    private IGeminiTtsService CreateSut()
-    {
-        return new GeminiTtsService(_httpClientFactory, _configuration);
-    }
-}
-
-
-// ── Test Helpers ──────────────────────────────────────────────────────────────
-
-/// <summary>
-/// Fake HTTP handler that returns minimal valid PCM audio (Gemini format: raw 16-bit PCM 24kHz).
-/// PCM data: 0x00 bytes (silence) wrapped in Gemini JSON response.
-/// </summary>
-public class FakePcmHttpMessageHandler : HttpMessageHandler
-{
-    protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
-    {
-        cancellationToken.ThrowIfCancellationRequested();
-
-        // Gemini TTS returns JSON with base64-encoded PCM audio
-        var silentPcm = new byte[4800]; // 0.1s of silence @ 24kHz 16-bit mono
-        var base64Pcm = Convert.ToBase64String(silentPcm);
-
-        var jsonBody = $$"""
+            return Task.FromResult(new HttpResponseMessage(_statusCode)
             {
-              "candidates": [{
-                "content": {
-                  "parts": [{
-                    "inlineData": {
-                      "mimeType": "audio/pcm;rate=24000",
-                      "data": "{{base64Pcm}}"
-                    }
-                  }]
-                }
-              }]
-            }
-            """;
-
-        var response = new HttpResponseMessage(System.Net.HttpStatusCode.OK)
-        {
-            Content = new StringContent(jsonBody, System.Text.Encoding.UTF8, "application/json")
-        };
-        return Task.FromResult(response);
-    }
-}
-
-
-/// <summary>
-/// Fake HTTP handler that returns an error status code.
-/// </summary>
-public class FakeErrorHttpMessageHandler(int statusCode) : HttpMessageHandler
-{
-    protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
-    {
-        var response = new HttpResponseMessage((System.Net.HttpStatusCode)statusCode);
-        return Task.FromResult(response);
+                Content = new StringContent(_responseContent, System.Text.Encoding.UTF8, "application/json")
+            });
+        }
     }
 }

@@ -1,4 +1,3 @@
-using System.ComponentModel.DataAnnotations;
 using VietTTS.Api.Models;
 using VietTTS.Api.Services;
 
@@ -6,36 +5,45 @@ namespace VietTTS.Api.Endpoints;
 
 public static class TtsEndpoints
 {
-    public static void MapTtsEndpoints(this WebApplication app)
+    public static void MapTtsEndpoints(this IEndpointRouteBuilder app)
     {
-        app.MapGet("/api/models", GetModels)
-           .WithName("GetModels")
-           .WithTags("TTS");
+        var group = app.MapGroup("/api");
 
-        app.MapGet("/api/voices", GetVoices)
-           .WithName("GetVoices")
-           .WithTags("TTS");
+        // GET /api/voices
+        group.MapGet("/voices", () =>
+        {
+            return Results.Ok(new
+            {
+                voices = VoiceCatalog.Voices,
+                defaultVoice = VoiceCatalog.Voices.FirstOrDefault(v => v.IsDefault)?.Id ?? "Charon"
+            });
+        })
+        .WithName("GetVoices")
+        .WithSummary("Danh sách giọng đọc AI hỗ trợ")
+        .Produces(StatusCodes.Status200OK);
 
-        app.MapPost("/api/tts", GenerateSpeech)
-           .WithName("GenerateSpeech")
-           .WithTags("TTS");
+        // GET /api/models
+        group.MapGet("/models", () =>
+        {
+            return Results.Ok(new
+            {
+                models = ModelCatalog.Models,
+                defaultModel = ModelCatalog.Models.FirstOrDefault(m => m.IsDefault)?.Id ?? "gemini-2.5-flash-preview-tts"
+            });
+        })
+        .WithName("GetModels")
+        .WithSummary("Danh sách mô hình TTS hỗ trợ")
+        .Produces(StatusCodes.Status200OK);
+
+        // POST /api/tts
+        group.MapPost("/tts", GenerateSpeech)
+        .WithName("GenerateSpeech")
+        .WithSummary("Chuyển đổi văn bản sang âm thanh MP3")
+        .Accepts<TtsRequest>("application/json")
+        .Produces(StatusCodes.Status200OK, contentType: "audio/mpeg")
+        .Produces(StatusCodes.Status400BadRequest)
+        .Produces(StatusCodes.Status502BadGateway);
     }
-
-    // ── GET /api/models ───────────────────────────────────────────────────────
-
-    private static IResult GetModels()
-    {
-        return Results.Ok(new { models = ModelCatalog.Models });
-    }
-
-    // ── GET /api/voices ───────────────────────────────────────────────────────
-
-    private static IResult GetVoices()
-    {
-        return Results.Ok(new { voices = VoiceCatalog.Voices });
-    }
-
-    // ── POST /api/tts ─────────────────────────────────────────────────────────
 
     private static async Task<IResult> GenerateSpeech(
         TtsRequest request,
@@ -43,7 +51,6 @@ public static class TtsEndpoints
         HttpContext httpContext,
         CancellationToken cancellationToken)
     {
-        // Validate text length (DataAnnotations not auto-run on minimal API)
         if (string.IsNullOrWhiteSpace(request.Text))
             return Results.BadRequest(new { error = "Text is required.", code = "TEXT_REQUIRED" });
 
@@ -59,7 +66,7 @@ public static class TtsEndpoints
         try
         {
             var result = await ttsService.GenerateAudioAsync(
-                request.Text, request.Voice, request.Speed, request.Model, cancellationToken);
+                request.Text, request.Voice, request.Speed, request.Model, request.ApiKey, cancellationToken);
 
             httpContext.Response.Headers["X-Usage-Prompt-Tokens"] = result.Usage.PromptTokens.ToString();
             httpContext.Response.Headers["X-Usage-Candidates-Tokens"] = result.Usage.CandidatesTokens.ToString();
@@ -68,27 +75,18 @@ public static class TtsEndpoints
             return Results.File(
                 result.AudioBytes,
                 contentType: "audio/mpeg",
-                fileDownloadName: "output.mp3");
+                fileDownloadName: "output.mp3",
+                enableRangeProcessing: true);
         }
-
         catch (HttpRequestException ex)
         {
-            return Results.Problem(
-                detail: ex.Message,
-                statusCode: StatusCodes.Status502BadGateway,
-                title: "TTS Provider Error");
+            return Results.Json(
+                new { error = "Dịch vụ Gemini API tạm thời không phản hồi. Vui lòng thử lại sau.", detail = ex.Message },
+                statusCode: StatusCodes.Status502BadGateway);
         }
-
-        catch (OperationCanceledException)
+        catch (InvalidOperationException ex)
         {
-            return Results.StatusCode(StatusCodes.Status499ClientClosedRequest);
-        }
-        catch (Exception ex)
-        {
-            return Results.Problem(
-                detail: ex.Message,
-                statusCode: StatusCodes.Status500InternalServerError,
-                title: "TTS Generation Error");
+            return Results.BadRequest(new { error = ex.Message, code = "CONFIG_ERROR" });
         }
     }
 }

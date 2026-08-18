@@ -7,6 +7,7 @@ import { SpeedSlider } from './components/SpeedSlider';
 import { AudioPlayer } from './components/AudioPlayer';
 import { ProgressBar } from './components/ProgressBar';
 import { UsageBadge } from './components/UsageBadge';
+import { ApiKeySettings } from './components/ApiKeySettings';
 import './styles/index.css';
 
 export default function App() {
@@ -18,6 +19,10 @@ export default function App() {
     setSelectedVoice,
     selectedModel,
     setSelectedModel,
+    customApiKey,
+    setCustomApiKey,
+    customApiUrl,
+    setCustomApiUrl,
     speed,
     setSpeed,
     state,
@@ -40,7 +45,7 @@ export default function App() {
           <div className="logo">
             <span className="logo-icon">🎙</span>
             <div className="logo-text">
-              <h1 className="title">VietTTS Studio</h1>
+              <h1 className="title">MinhTTS Studio</h1>
               <p className="subtitle">Chuyển đổi văn bản tiếng Việt sang giọng nói AI</p>
             </div>
           </div>
@@ -55,6 +60,17 @@ export default function App() {
               models={models}
               value={selectedModel}
               onChange={setSelectedModel}
+              disabled={state.isLoading}
+            />
+          </section>
+
+          {/* User Server & API Key Settings */}
+          <section className="section">
+            <ApiKeySettings
+              apiKey={customApiKey}
+              onSaveApiKey={setCustomApiKey}
+              apiUrl={customApiUrl}
+              onSaveApiUrl={setCustomApiUrl}
               disabled={state.isLoading}
             />
           </section>
@@ -141,7 +157,9 @@ export default function App() {
 
         {/* Footer */}
         <footer className="footer">
-          <p>Giọng mặc định: <strong>Charon</strong> (Adam-like TikTok) • Hỗ trợ Google Gemini & Local F5-TTS</p>
+          <p>
+            Tác giả: <strong>Zygardoge (Nguyen Ngoc Minh)</strong> — Email: <a href="mailto:mrminht2000@gmail.com" style={{ color: 'var(--accent)', textDecoration: 'none' }}>mrminht2000@gmail.com</a>
+          </p>
         </footer>
       </main>
     </div>

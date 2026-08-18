@@ -24,8 +24,9 @@ public class GeminiTtsService : IGeminiTtsService
         _httpClientFactory = httpClientFactory;
         _apiKey = configuration["Gemini:ApiKey"]
                   ?? throw new InvalidOperationException("Gemini:ApiKey is not configured.");
-        _model = configuration["Gemini:Model"] ?? "gemini-2.5-flash-tts";
+        _model = configuration["Gemini:Model"] ?? "gemini-2.5-flash-preview-tts";
     }
+
 
 
 
@@ -34,11 +35,14 @@ public class GeminiTtsService : IGeminiTtsService
         string voice,
         double speed,
         string? model = null,
+        string? apiKey = null,
         CancellationToken cancellationToken = default)
     {
         var targetModel = !string.IsNullOrWhiteSpace(model) ? model : _model;
+        var effectiveKey = !string.IsNullOrWhiteSpace(apiKey) ? apiKey.Trim() : _apiKey;
         var client = _httpClientFactory.CreateClient("gemini");
-        var url = $"v1beta/models/{targetModel}:generateContent?key={_apiKey}";
+        var url = $"v1beta/models/{targetModel}:generateContent?key={effectiveKey}";
+
 
         // Build Gemini TTS request
         var requestBody = BuildGeminiRequest(text, voice, speed);

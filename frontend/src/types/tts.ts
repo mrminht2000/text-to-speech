@@ -3,6 +3,7 @@ export interface VoiceInfo {
   name: string;
   style: string;
   label: string;
+  provider?: string;
   isDefault: boolean;
 }
 
@@ -26,6 +27,7 @@ export interface TtsRequest {
   voice: string;
   speed: number;
   model?: string;
+  apiKey?: string;
 }
 
 export interface TtsResponseResult {

@@ -186,3 +186,5 @@ x86/
 *.vsix
 .agents
 backend/VietTTS.Api/appsettings.json
+cloudflared.exe
+

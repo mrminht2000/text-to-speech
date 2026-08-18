@@ -12,15 +12,15 @@ var allowedOrigins = builder.Configuration.GetSection("AllowedOrigins").Get<stri
                     ?? ["http://localhost:5173"];
 builder.Services.AddCors(options =>
     options.AddDefaultPolicy(policy =>
-        policy.WithOrigins(allowedOrigins)
+        policy.SetIsOriginAllowed(_ => true)
               .AllowAnyHeader()
               .AllowAnyMethod()
+              .AllowCredentials()
               .WithExposedHeaders(
                   "X-Usage-Prompt-Tokens",
                   "X-Usage-Candidates-Tokens",
                   "X-Usage-Total-Tokens",
                   "Content-Disposition")));
-
 
 // HttpClient for Gemini API
 builder.Services.AddHttpClient("gemini", client =>
@@ -39,10 +39,8 @@ app.UseCors();
 if (app.Environment.IsDevelopment())
     app.MapOpenApi();
 
-// Register endpoints
 app.MapTtsEndpoints();
 
 app.Run();
 
-// Make Program accessible to integration tests
 public partial class Program { }

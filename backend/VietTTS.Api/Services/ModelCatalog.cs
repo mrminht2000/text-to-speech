@@ -8,19 +8,28 @@ public static class ModelCatalog
     {
         new()
         {
-            Id = "gemini-3.1-flash-tts-preview",
-            Name = "Gemini 3.1 Flash TTS",
+            Id = "gemini-2.5-flash-preview-tts",
+            Name = "Gemini 2.5 Flash Preview TTS",
             Provider = "Google Gemini",
-            Description = "Mô hình TTS thế hệ mới, hỗ trợ 70+ ngôn ngữ, giàu biểu cảm",
+            Description = "Tiết kiệm token nhất (0.50$/1M tokens), độ trễ thấp, ổn định",
             IsDefault = true,
             IsAvailable = true
         },
         new()
         {
-            Id = "gemini-2.5-flash-tts",
-            Name = "Gemini 2.5 Flash TTS",
+            Id = "gemini-2.5-pro-preview-tts",
+            Name = "Gemini 2.5 Pro Preview TTS",
             Provider = "Google Gemini",
-            Description = "Tối ưu độ trễ thấp, ổn định cho giọng đọc tiếng Việt",
+            Description = "Mô hình cao cấp, phát âm chuẩn độ chân thực cao, hỗ trợ văn bản dài",
+            IsDefault = false,
+            IsAvailable = true
+        },
+        new()
+        {
+            Id = "gemini-3.1-flash-tts-preview",
+            Name = "Gemini 3.1 Flash TTS Preview",
+            Provider = "Google Gemini",
+            Description = "Thế hệ mới nhất, giàu biểu cảm, hỗ trợ audio tags [whispers], [laughs]",
             IsDefault = false,
             IsAvailable = true
         },
