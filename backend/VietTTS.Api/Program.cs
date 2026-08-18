@@ -29,8 +29,16 @@ builder.Services.AddHttpClient("gemini", client =>
     client.Timeout = TimeSpan.FromSeconds(60);
 });
 
-// TTS service
+// HttpClient for Local TTS Engine
+builder.Services.AddHttpClient("local_tts", client =>
+{
+    client.Timeout = TimeSpan.FromSeconds(120);
+});
+
+// TTS Services & Engine Factory
 builder.Services.AddSingleton<IGeminiTtsService, GeminiTtsService>();
+builder.Services.AddSingleton<ILocalTtsService, LocalTtsService>();
+builder.Services.AddSingleton<ITtsEngineFactory, TtsEngineFactory>();
 
 var app = builder.Build();
 

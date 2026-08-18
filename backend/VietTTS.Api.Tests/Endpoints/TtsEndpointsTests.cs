@@ -42,12 +42,13 @@ public class TtsEndpointsTests : IClassFixture<WebApplicationFactory<Program>>
         var json = await response.Content.ReadFromJsonAsync<ModelsResponse>();
         json.Should().NotBeNull();
         json!.Models.Should().NotBeEmpty();
+        json!.Models.Should().Contain(m => m.Id == "f5-tts-vietnamese" && m.IsAvailable);
     }
 
     [Fact]
     public async Task GenerateSpeech_WithValidRequest_ReturnsAudioMpeg()
     {
-        var client = CreateClientWithMockTts([0xFF, 0xFB, 0x90, 0x00]);
+        var client = CreateClientWithMockEngine([0xFF, 0xFB, 0x90, 0x00]);
         var request = new TtsRequest { Text = "Xin chào", Voice = "Charon", Speed = 1.0 };
 
         var response = await client.PostAsJsonAsync("/api/tts", request);
@@ -78,22 +79,38 @@ public class TtsEndpointsTests : IClassFixture<WebApplicationFactory<Program>>
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
     }
 
-    private HttpClient CreateClientWithMockTts(byte[] mockAudioBytes)
+    [Fact]
+    public async Task GenerateSpeech_WithLocalModelAndVoiceCloning_ReturnsSuccess()
     {
-        var mockTtsService = Substitute.For<IGeminiTtsService>();
+        var client = CreateClientWithMockEngine([0x52, 0x49, 0x46, 0x46]);
+        var request = new TtsRequest
+        {
+            Text = "Xin chào từ mô hình Local F5-TTS",
+            Voice = "voice_clone_custom",
+            Model = "f5-tts-vietnamese",
+            ReferenceAudioBase64 = "UklGRgAAAABXQVZFZm10"
+        };
+
+        var response = await client.PostAsJsonAsync("/api/tts", request);
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+    }
+
+    private HttpClient CreateClientWithMockEngine(byte[] mockAudioBytes)
+    {
+        var mockEngineFactory = Substitute.For<ITtsEngineFactory>();
         var fakeResult = new TtsResult
         {
             AudioBytes = mockAudioBytes,
             Usage = new TtsUsage { PromptTokens = 5, CandidatesTokens = 40, TotalTokens = 45 }
         };
 
-        mockTtsService.GenerateAudioAsync(
-            Arg.Any<string>(), Arg.Any<string>(), Arg.Any<double>(), Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<CancellationToken>())
+        mockEngineFactory.ProcessTtsRequestAsync(Arg.Any<TtsRequest>(), Arg.Any<CancellationToken>())
             .Returns(Task.FromResult(fakeResult));
 
         return _factory.WithWebHostBuilder(builder =>
             builder.ConfigureServices(services =>
-                services.AddSingleton(mockTtsService)))
+                services.AddSingleton(mockEngineFactory)))
             .CreateClient();
     }
 

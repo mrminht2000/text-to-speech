@@ -19,7 +19,7 @@ public static class TtsEndpoints
             });
         })
         .WithName("GetVoices")
-        .WithSummary("Danh sách giọng đọc AI hỗ trợ")
+        .WithSummary("Danh sách giọng đọc AI hỗ trợ (Cloud & Local)")
         .Produces(StatusCodes.Status200OK);
 
         // GET /api/models
@@ -38,7 +38,7 @@ public static class TtsEndpoints
         // POST /api/tts
         group.MapPost("/tts", GenerateSpeech)
         .WithName("GenerateSpeech")
-        .WithSummary("Chuyển đổi văn bản sang âm thanh MP3")
+        .WithSummary("Chuyển đổi văn bản sang âm thanh MP3 / WAV")
         .Accepts<TtsRequest>("application/json")
         .Produces(StatusCodes.Status200OK, contentType: "audio/mpeg")
         .Produces(StatusCodes.Status400BadRequest)
@@ -47,7 +47,7 @@ public static class TtsEndpoints
 
     private static async Task<IResult> GenerateSpeech(
         TtsRequest request,
-        IGeminiTtsService ttsService,
+        ITtsEngineFactory engineFactory,
         HttpContext httpContext,
         CancellationToken cancellationToken)
     {
@@ -65,8 +65,7 @@ public static class TtsEndpoints
 
         try
         {
-            var result = await ttsService.GenerateAudioAsync(
-                request.Text, request.Voice, request.Speed, request.Model, request.ApiKey, cancellationToken);
+            var result = await engineFactory.ProcessTtsRequestAsync(request, cancellationToken);
 
             httpContext.Response.Headers["X-Usage-Prompt-Tokens"] = result.Usage.PromptTokens.ToString();
             httpContext.Response.Headers["X-Usage-Candidates-Tokens"] = result.Usage.CandidatesTokens.ToString();
@@ -81,7 +80,7 @@ public static class TtsEndpoints
         catch (HttpRequestException ex)
         {
             return Results.Json(
-                new { error = "Dịch vụ Gemini API tạm thời không phản hồi. Vui lòng thử lại sau.", detail = ex.Message },
+                new { error = "Không thể kết nối đến dịch vụ TTS Engine. Vui lòng thử lại sau.", detail = ex.Message },
                 statusCode: StatusCodes.Status502BadGateway);
         }
         catch (InvalidOperationException ex)

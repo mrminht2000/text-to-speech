@@ -188,3 +188,5 @@ x86/
 backend/VietTTS.Api/appsettings.json
 cloudflared.exe
 
+
+.vercel

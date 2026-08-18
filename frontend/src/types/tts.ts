@@ -28,6 +28,8 @@ export interface TtsRequest {
   speed: number;
   model?: string;
   apiKey?: string;
+  referenceAudioBase64?: string;
+  referenceText?: string;
 }
 
 export interface TtsResponseResult {

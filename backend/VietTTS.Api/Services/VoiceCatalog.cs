@@ -3,13 +3,21 @@ using VietTTS.Api.Models;
 namespace VietTTS.Api.Services;
 
 /// <summary>
-/// Static catalog of available Gemini TTS voices according to Google AI Speech Generation specification.
+/// Static catalog of available voices categorized by Provider (Google Gemini, Local Model).
 /// </summary>
 public static class VoiceCatalog
 {
     public static readonly IReadOnlyList<VoiceInfo> Voices = new List<VoiceInfo>
     {
-        // ── Standard & Popular Voices ──────────────────────────────────────────
+        // ── Local Model Voices (Voice Cloning & 3-Region Accents) ───────────────
+        new() { Id = "voice_clone_custom", Name = "Voice Clone (Mẫu tải lên)", Style = "Custom Voice",   Label = "🎙️ Voice Cloning (Từ Audio mẫu tải lên) ★", Provider = "Local Model", IsDefault = false },
+        new() { Id = "north_female",        Name = "Nữ miền Bắc (Hà Nội)",     Style = "Natural / Crisp", Label = "👩 Nữ miền Bắc — Trong trẻo, thanh thoát",    Provider = "Local Model", IsDefault = false },
+        new() { Id = "north_male",          Name = "Nam miền Bắc (Hà Nội)",     Style = "Mature / Firm",   Label = "👨 Nam miền Bắc — Trầm ấm, dõng dạc",       Provider = "Local Model", IsDefault = false },
+        new() { Id = "south_female",        Name = "Nữ miền Nam (Sài Gòn)",     Style = "Warm / Melodic",  Label = "👩 Nữ miền Nam — Ngọt ngào, tự nhiên",      Provider = "Local Model", IsDefault = false },
+        new() { Id = "south_male",          Name = "Nam miền Nam (Sài Gòn)",     Style = "Friendly",        Label = "👨 Nam miền Nam — Thân thiện, gần gũi",     Provider = "Local Model", IsDefault = false },
+        new() { Id = "central_female",      Name = "Nữ miền Trung (Huế/Đà Nẵng)", Style = "Gentle",        Label = "👩 Nữ miền Trung — Dịu dàng, truyền cảm",   Provider = "Local Model", IsDefault = false },
+
+        // ── Google Gemini Standard Voices ──────────────────────────────────────
         new() { Id = "Charon",      Name = "Charon",      Style = "Informative / Firm", Label = "Adam-like (Mặc định TikTok) ★", Provider = "Google Gemini", IsDefault = true  },
         new() { Id = "Puck",        Name = "Puck",        Style = "Upbeat",             Label = "Puck — Vui tươi, năng động",     Provider = "Google Gemini", IsDefault = false },
         new() { Id = "Kore",        Name = "Kore",        Style = "Firm",               Label = "Kore — Dứt khoát, chuyên nghiệp", Provider = "Google Gemini", IsDefault = false },
@@ -26,8 +34,6 @@ public static class VoiceCatalog
         new() { Id = "Achird",      Name = "Achird",      Style = "Friendly",           Label = "Achird — Thân thiện, gần gũi",   Provider = "Google Gemini", IsDefault = false },
         new() { Id = "Sadachbia",   Name = "Sadachbia",   Style = "Lively",             Label = "Sadachbia — Linh hoạt, sinh động", Provider = "Google Gemini", IsDefault = false },
         new() { Id = "Enceladus",   Name = "Enceladus",   Style = "Breathy",            Label = "Enceladus — Mềm mại, thì thầm",  Provider = "Google Gemini", IsDefault = false },
-
-        // ── Extended Roster (Chirp 3 / HD Voices) ──────────────────────────────
         new() { Id = "Iapetus",     Name = "Iapetus",     Style = "Authoritative",      Label = "Iapetus — Uy quyền, phóng sự",   Provider = "Google Gemini", IsDefault = false },
         new() { Id = "Algieba",     Name = "Algieba",     Style = "Reflective",         Label = "Algieba — Suy tư, sâu lắng",     Provider = "Google Gemini", IsDefault = false },
         new() { Id = "Despina",     Name = "Despina",     Style = "Melodic",            Label = "Despina — Du dương, êm ái",      Provider = "Google Gemini", IsDefault = false },

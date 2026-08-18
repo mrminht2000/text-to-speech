@@ -3,15 +3,16 @@ import { useTts } from './hooks/useTts';
 import { TextInput } from './components/TextInput';
 import { ModelSelector } from './components/ModelSelector';
 import { VoiceSelector } from './components/VoiceSelector';
+import { VoiceCloner } from './components/VoiceCloner';
 import { SpeedSlider } from './components/SpeedSlider';
-import { AudioPlayer } from './components/AudioPlayer';
 import { ProgressBar } from './components/ProgressBar';
 import { UsageBadge } from './components/UsageBadge';
+import { AudioPlayer } from './components/AudioPlayer';
 import { ApiKeySettings } from './components/ApiKeySettings';
-import './styles/index.css';
 
-export default function App() {
+export function App() {
   const [text, setText] = useState('');
+
   const {
     voices,
     models,
@@ -19,6 +20,10 @@ export default function App() {
     setSelectedVoice,
     selectedModel,
     setSelectedModel,
+    referenceAudio,
+    setReferenceAudio,
+    referenceText,
+    setReferenceText,
     customApiKey,
     setCustomApiKey,
     customApiUrl,
@@ -30,11 +35,15 @@ export default function App() {
     download,
   } = useTts();
 
-  const handleGenerate = () => generate(text);
+  const handleGenerate = () => {
+    generate(text);
+  };
+
+  const isVoiceCloningModel = selectedModel === 'f5-tts-vietnamese';
 
   return (
     <div className="app">
-      {/* Background orbs */}
+      {/* Background ambient orbs */}
       <div className="bg-orb bg-orb-1" aria-hidden="true" />
       <div className="bg-orb bg-orb-2" aria-hidden="true" />
       <div className="bg-orb bg-orb-3" aria-hidden="true" />
@@ -43,50 +52,47 @@ export default function App() {
         {/* Header */}
         <header className="header">
           <div className="logo">
-            <span className="logo-icon">🎙</span>
-            <div className="logo-text">
+            <span className="logo-icon" role="img" aria-label="Mic">🎙️</span>
+            <div>
               <h1 className="title">MinhTTS Studio</h1>
-              <p className="subtitle">Chuyển đổi văn bản tiếng Việt sang giọng nói AI</p>
+              <p className="subtitle">Chuyển đổi văn bản sang giọng nói AI tiếng Việt cao cấp</p>
             </div>
           </div>
-          <div className="badge">AI Speech Engine</div>
+          <span className="badge">AI Audio</span>
         </header>
 
-        {/* Card */}
+        {/* API Key & Backend Server Configuration */}
+        <ApiKeySettings
+          apiKey={customApiKey}
+          onSaveApiKey={setCustomApiKey}
+          apiUrl={customApiUrl}
+          onSaveApiUrl={setCustomApiUrl}
+          disabled={state.isLoading}
+        />
+
+        {/* Main Interactive Glassmorphism Card */}
         <div className="card">
-          {/* Model selection row */}
-          <section className="section">
-            <ModelSelector
-              models={models}
-              value={selectedModel}
-              onChange={setSelectedModel}
-              disabled={state.isLoading}
-            />
-          </section>
-
-          {/* User Server & API Key Settings */}
-          <section className="section">
-            <ApiKeySettings
-              apiKey={customApiKey}
-              onSaveApiKey={setCustomApiKey}
-              apiUrl={customApiUrl}
-              onSaveApiUrl={setCustomApiUrl}
-              disabled={state.isLoading}
-            />
-          </section>
-
-          {/* Text input */}
-          <section className="section">
-            <h2 className="section-title">📝 Văn bản cần đọc</h2>
+          {/* Text Input & Markdown preview */}
+          <div className="section">
             <TextInput
               value={text}
               onChange={setText}
               disabled={state.isLoading}
+              maxLength={5000}
             />
-          </section>
+          </div>
 
-          {/* Controls row */}
-          <section className="section controls-row">
+          {/* Model & Voice selection in a balanced 2-column row */}
+          <div className="controls-row">
+            <div className="control-group">
+              <ModelSelector
+                models={models}
+                value={selectedModel}
+                onChange={setSelectedModel}
+                disabled={state.isLoading}
+              />
+            </div>
+
             <div className="control-group">
               <VoiceSelector
                 voices={voices}
@@ -95,73 +101,82 @@ export default function App() {
                 disabled={state.isLoading}
               />
             </div>
-            <div className="control-group">
-              <SpeedSlider
-                value={speed}
-                onChange={setSpeed}
-                disabled={state.isLoading}
-              />
-            </div>
-          </section>
+          </div>
 
-          {/* Progress bar during generation */}
-          {state.isLoading && (
-            <ProgressBar progress={state.progress} />
+          {/* Voice Cloner (Conditional for F5-TTS) */}
+          {isVoiceCloningModel && (
+            <VoiceCloner
+              referenceAudio={referenceAudio}
+              onReferenceAudioChange={setReferenceAudio}
+              referenceText={referenceText}
+              onReferenceTextChange={setReferenceText}
+              disabled={state.isLoading}
+            />
           )}
 
-          {/* Error */}
+          {/* Speed slider */}
+          <SpeedSlider
+            value={speed}
+            onChange={setSpeed}
+            disabled={state.isLoading}
+          />
+
+          {/* Generate Button */}
+          <button
+            type="button"
+            className={`btn-generate ${state.isLoading ? 'loading' : ''}`}
+            onClick={handleGenerate}
+            disabled={state.isLoading || !text.trim()}
+            id="btn-generate-speech"
+          >
+            {state.isLoading ? (
+              <>
+                <span className="spinner" />
+                Đang tổng hợp giọng đọc...
+              </>
+            ) : (
+              '▶ Chuyển thành giọng nói'
+            )}
+          </button>
+
+          {/* Progress bar */}
+          {state.isLoading && <ProgressBar progress={state.progress} />}
+
+          {/* Error Message */}
           {state.error && (
             <div className="error-banner" role="alert">
               ⚠️ {state.error}
             </div>
           )}
 
-          {/* Generate button */}
-          <button
-            id="generate-btn"
-            className={`btn-generate ${state.isLoading ? 'loading' : ''}`}
-            onClick={handleGenerate}
-            disabled={state.isLoading || !text.trim()}
-            aria-busy={state.isLoading}
-          >
-            {state.isLoading ? (
-              <>
-                <span className="spinner" aria-hidden="true" />
-                Đang chuyển đổi giọng nói...
-              </>
-            ) : (
-              <>
-                <span>▶</span> Tạo giọng nói
-              </>
-            )}
-          </button>
+          {/* Token Usage Badge */}
+          {state.usage && <UsageBadge usage={state.usage} />}
 
-          {/* Audio player + download + usage */}
+          {/* Audio Output Result */}
           {state.audioUrl && (
-            <section className="section result-section">
-              <div className="result-header">
-                <h2 className="section-title">🔊 Kết quả Âm thanh</h2>
-                <UsageBadge usage={state.usage} />
-              </div>
+            <div className="result-section">
               <AudioPlayer audioUrl={state.audioUrl} />
               <button
-                id="download-btn"
+                type="button"
                 className="btn-download"
                 onClick={download}
+                id="btn-download-audio"
               >
-                ⬇ Tải xuống file MP3
+                📥 Tải xuống file MP3
               </button>
-            </section>
+            </div>
           )}
         </div>
 
         {/* Footer */}
         <footer className="footer">
           <p>
-            Tác giả: <strong>Zygardoge (Nguyen Ngoc Minh)</strong> — Email: <a href="mailto:mrminht2000@gmail.com" style={{ color: 'var(--accent)', textDecoration: 'none' }}>mrminht2000@gmail.com</a>
+            Tác giả: <strong>Zygardoge (Nguyen Ngoc Minh)</strong> — Email: <code>mrminht2000@gmail.com</code>
           </p>
         </footer>
       </main>
     </div>
   );
 }
+
+export default App;

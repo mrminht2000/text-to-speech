@@ -36,11 +36,20 @@ public static class ModelCatalog
         new()
         {
             Id = "f5-tts-vietnamese",
-            Name = "F5-TTS Vietnamese (Local GPU)",
+            Name = "F5-TTS Vietnamese (Voice Cloning)",
             Provider = "Local Model",
-            Description = "Mô hình Flow Matching nội bộ, hỗ trợ Voice Cloning (Sắp ra mắt)",
+            Description = "Mô hình Flow Matching SOTA, nhân bản mọi giọng nói từ audio mẫu 3–10 giây",
             IsDefault = false,
-            IsAvailable = false
+            IsAvailable = true
+        },
+        new()
+        {
+            Id = "vieneu-tts",
+            Name = "VieNeu-TTS (Bắc / Trung / Nam)",
+            Provider = "Local Model",
+            Description = "Mô hình siêu nhẹ, hỗ trợ đọc chất giọng tự nhiên 3 miền Bắc - Trung - Nam",
+            IsDefault = false,
+            IsAvailable = true
         },
         new()
         {

@@ -16,4 +16,14 @@ public class TtsRequest
     public string? Model { get; set; }
 
     public string? ApiKey { get; set; }
+
+    /// <summary>
+    /// Base64 encoded reference audio (3-10s) for Zero-shot Voice Cloning (F5-TTS).
+    /// </summary>
+    public string? ReferenceAudioBase64 { get; set; }
+
+    /// <summary>
+    /// Optional transcript of the reference audio for higher cloning accuracy.
+    /// </summary>
+    public string? ReferenceText { get; set; }
 }

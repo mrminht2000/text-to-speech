@@ -10,6 +10,8 @@ export function useTts() {
   const [models, setModels] = useState<ModelInfo[]>([]);
   const [selectedVoice, setSelectedVoice] = useState<string>('Charon');
   const [selectedModel, setSelectedModel] = useState<string>('gemini-2.5-flash-preview-tts');
+  const [referenceAudio, setReferenceAudio] = useState<string | null>(null);
+  const [referenceText, setReferenceText] = useState<string>('');
   const [customApiKey, setCustomApiKeyState] = useState<string>(() => {
     try {
       return localStorage.getItem(STORAGE_KEY_API_KEY) || '';
@@ -96,6 +98,15 @@ export function useTts() {
     };
   }, [customApiUrl]);
 
+  // When model changes to F5-TTS, auto select voice_clone_custom
+  useEffect(() => {
+    if (selectedModel === 'f5-tts-vietnamese') {
+      setSelectedVoice('voice_clone_custom');
+    } else if (selectedModel === 'vieneu-tts') {
+      setSelectedVoice('north_female');
+    }
+  }, [selectedModel]);
+
   const startProgressAnimation = () => {
     setState((s) => ({ ...s, progress: 8 }));
     if (progressIntervalRef.current) clearInterval(progressIntervalRef.current);
@@ -157,6 +168,8 @@ export function useTts() {
           speed,
           model: selectedModel,
           apiKey: customApiKey.trim() || undefined,
+          referenceAudioBase64: referenceAudio || undefined,
+          referenceText: referenceText || undefined,
         },
         customApiUrl.trim() || undefined,
       );
@@ -177,7 +190,7 @@ export function useTts() {
       const message = err instanceof Error ? err.message : 'Đã xảy ra lỗi không xác định.';
       setState((s) => ({ ...s, isLoading: false, progress: 0, error: message }));
     }
-  }, [selectedVoice, speed, selectedModel, customApiKey, customApiUrl]);
+  }, [selectedVoice, speed, selectedModel, customApiKey, customApiUrl, referenceAudio, referenceText]);
 
   const download = useCallback(() => {
     if (!state.audioBlob) return;
@@ -197,6 +210,10 @@ export function useTts() {
     setSelectedVoice,
     selectedModel,
     setSelectedModel,
+    referenceAudio,
+    setReferenceAudio,
+    referenceText,
+    setReferenceText,
     customApiKey,
     setCustomApiKey,
     customApiUrl,

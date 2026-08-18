@@ -10,6 +10,14 @@ interface Props {
 export function VoiceSelector({ voices, value, onChange, disabled }: Props) {
   const currentVoice = voices.find((v) => v.id === value);
 
+  // Group voices by provider
+  const groupedVoices = voices.reduce<Record<string, VoiceInfo[]>>((acc, voice) => {
+    const provider = voice.provider || 'Khác';
+    if (!acc[provider]) acc[provider] = [];
+    acc[provider].push(voice);
+    return acc;
+  }, {});
+
   return (
     <div className="voice-selector-wrapper">
       <div className="voice-header-row">
@@ -28,10 +36,14 @@ export function VoiceSelector({ voices, value, onChange, disabled }: Props) {
         disabled={disabled}
         aria-label="Chọn giọng đọc"
       >
-        {voices.map((voice) => (
-          <option key={voice.id} value={voice.id}>
-            {voice.label} ({voice.style})
-          </option>
+        {Object.entries(groupedVoices).map(([providerName, providerVoices]) => (
+          <optgroup key={providerName} label={`── ${providerName} ──`}>
+            {providerVoices.map((voice) => (
+              <option key={voice.id} value={voice.id}>
+                {voice.label} ({voice.style})
+              </option>
+            ))}
+          </optgroup>
         ))}
       </select>
     </div>
