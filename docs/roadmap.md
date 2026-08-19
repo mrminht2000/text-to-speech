@@ -53,3 +53,18 @@
   - Tích hợp `ElevenLabsTtsService`, tự động cấu hình ElevenLabs API Key trong Tab Quản lý API Key.
 - [x] **Bộ định tuyến Dynamic Routing 4 trong 1**:
   - Tự động nhận diện và chuyển tiếp request đến `GeminiTtsService`, `LocalTtsService`, `OpenAiTtsService`, hoặc `ElevenLabsTtsService`.
+
+---
+
+## 🎬 Phase 5: Tự Động Tạo Phụ Đề & Bộ Biên Tập Subtitle (Whisper STT) (Hoàn thành)
+- [x] **AI Speech-to-Text Pipeline (STT)**:
+  - Tích hợp **Faster-Whisper** trên Python Local Engine (CUDA/CPU) và Cloud Gemini Audio Fallback.
+  - Hỗ trợ căn chỉnh mốc thời gian chi tiết theo từng từ và từng câu (Segment & Word Timestamps).
+- [x] **Tự động sinh phụ đề song song khi chuyển văn bản thành giọng nói (TTS + Auto Subtitles)**:
+  - Tự động tạo phụ đề đồng bộ ngay sau khi chuyển đổi giọng nói với tuỳ chọn "Tự động tạo phụ đề (Auto-generate Subtitles)".
+- [x] **Bộ biên tập phụ đề Subtitle Editor chuyên nghiệp**:
+  - Giao diện trực quan: Chỉnh sửa text, thời gian bắt đầu/kết thúc (`start_time`, `end_time`), thêm/xóa/hợp nhất/chia nhỏ dòng phụ đề.
+  - Đồng bộ thời gian thực với Audio Player: Bấm vào dòng phụ đề để nhảy audio đến vị trí tương ứng, highlight câu đang đọc.
+  - Tải lên tệp âm thanh bất kỳ (.mp3, .wav, .m4a) để bóc băng và tạo phụ đề tự động.
+- [x] **Xuất đa định dạng**:
+  - Hỗ trợ xuất chuẩn **SRT** (SubRip), **VTT** (WebVTT), và **JSON** kèm metadata.
